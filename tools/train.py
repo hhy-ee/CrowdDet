@@ -6,8 +6,8 @@ import torch
 
 # sys.path.insert(0, '../lib')
 # sys.path.insert(0, '../model')
-lib_dir = os.path.join(os.path.dirname(__file__), '../lib')
-model_dir = os.path.join(os.path.dirname(__file__), '../model')
+lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
+model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
 sys.path.insert(0, lib_dir)
 sys.path.insert(0, model_dir)
 from data.CrowdHuman import CrowdHuman
@@ -144,8 +144,8 @@ def multi_train(params, config, network):
     train_config.weight_decay = config.weight_decay
     train_config.lr_decay = config.lr_decay
     train_config.model_dir = os.path.join('../model/', params.model_dir, config.model_dir)
-    line = 'network.lr.{}.train.{}'.format(
-            train_config.learning_rate, train_config.total_epoch)
+    line = 'network.lr.{}.train.{}.klw.{}'.format(
+            train_config.learning_rate, train_config.total_epoch, config.kl_weight)
     train_config.log_path = os.path.join('../model/', params.model_dir, config.output_dir, line+'.log')
     train_config.resume_weights = params.resume_weights
     train_config.init_weights = config.init_weights
@@ -168,10 +168,11 @@ def run_train():
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '8888'
     os.environ['NCCL_IB_DISABLE'] = '1'
-    #os.environ['NCCL_DEBUG'] = 'INFO'
-    # args = parser.parse_args()
-    
-    args = parser.parse_args(['--model_dir', 'retina_fpn_baseline'])
+    # os.environ['NCCL_DEBUG'] = 'INFO'
+
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd'])
+
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
