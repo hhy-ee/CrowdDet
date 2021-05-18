@@ -144,8 +144,8 @@ def multi_train(params, config, network):
     train_config.weight_decay = config.weight_decay
     train_config.lr_decay = config.lr_decay
     train_config.model_dir = os.path.join('../model/', params.model_dir, config.model_dir)
-    line = 'network.lr.{}.train.{}.klw.{}'.format(
-            train_config.learning_rate, train_config.total_epoch, config.kl_weight)
+    line = 'network.lr.{}.train.{}'.format(
+            train_config.learning_rate, train_config.total_epoch)
     train_config.log_path = os.path.join('../model/', params.model_dir, config.output_dir, line+'.log')
     train_config.resume_weights = params.resume_weights
     train_config.init_weights = config.init_weights
