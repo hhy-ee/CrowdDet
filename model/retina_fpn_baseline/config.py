@@ -8,6 +8,7 @@ def add_path(path):
         sys.path.insert(0, path)
 
 root_dir = os.path.join(os.path.dirname(__file__), '../../')
+model_dir = os.path.dirname(__file__)
 
 class Crowd_human:
     class_names = ['background', 'person']
@@ -18,7 +19,7 @@ class Crowd_human:
     eval_source = os.path.join(root_dir, 'lib/data/CrowdHuman/annotation_val.odgt')
 
 class Config:
-    output_dir = os.path.join(os.path.dirname(__file__), 'outputs')
+    output_dir = os.path.join(model_dir, 'outputs')
     model_dir = os.path.join(output_dir, 'model_dump')
     eval_dir = os.path.join(output_dir, 'eval_dump')
     init_weights = os.path.join(root_dir, 'lib/data/model/resnet50_fbaug.pth')
