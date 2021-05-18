@@ -1,9 +1,9 @@
 import os
 import json
 import numpy as np
+import cv2
 
-def load_img(image_path):
-    import cv2
+def load_img(image_path):    
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
     return img
 

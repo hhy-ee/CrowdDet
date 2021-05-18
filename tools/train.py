@@ -1,10 +1,15 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 import torch
 
-sys.path.insert(0, '../lib')
-sys.path.insert(0, '../model')
+# sys.path.insert(0, '../lib')
+# sys.path.insert(0, '../model')
+lib_dir = os.path.join(os.path.dirname(__file__), '../lib')
+model_dir = os.path.join(os.path.dirname(__file__), '../model')
+sys.path.insert(0, lib_dir)
+sys.path.insert(0, model_dir)
 from data.CrowdHuman import CrowdHuman
 from utils import misc_utils, SGD_bias
 
@@ -122,6 +127,7 @@ def multi_train(params, config, network):
         print('No GPU exists!')
         return
     else:
+
         num_gpus = torch.cuda.device_count()
     torch.set_default_tensor_type('torch.FloatTensor')
     # setting training config
@@ -153,6 +159,7 @@ def multi_train(params, config, network):
     print(line)
     print("Init multi-processing training...")
     torch.multiprocessing.spawn(train_worker, nprocs=num_gpus, args=(train_config, network, config))
+    # train_worker(num_gpus-1, train_config, network, config)
 
 def run_train():
     parser = argparse.ArgumentParser()
@@ -162,9 +169,11 @@ def run_train():
     os.environ['MASTER_PORT'] = '8888'
     os.environ['NCCL_IB_DISABLE'] = '1'
     #os.environ['NCCL_DEBUG'] = 'INFO'
-    args = parser.parse_args()
+    # args = parser.parse_args()
+    
+    args = parser.parse_args(['--model_dir', 'retina_fpn_baseline'])
     # import libs
-    model_root_dir = os.path.join('../model/', args.model_dir)
+    model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network

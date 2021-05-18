@@ -7,23 +7,21 @@ def add_path(path):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-root_dir = '../../'
-add_path(os.path.join(root_dir))
-add_path(os.path.join(root_dir, 'lib'))
+root_dir = os.path.join(os.path.dirname(__file__), '../../')
 
 class Crowd_human:
     class_names = ['background', 'person']
     num_classes = len(class_names)
-    root_folder = '/data/CrowdHuman'
-    image_folder = '/data/CrowdHuman/images'
-    train_source = os.path.join('/data/CrowdHuman/annotation_train.odgt')
-    eval_source = os.path.join('/data/CrowdHuman/annotation_val.odgt')
+    root_folder = os.path.join(root_dir, 'lib/data/CrowdHuman')
+    image_folder = os.path.join(root_dir, 'lib/data/CrowdHuman/Images')
+    train_source = os.path.join(root_dir, 'lib/data/CrowdHuman/annotation_train.odgt')
+    eval_source = os.path.join(root_dir, 'lib/data/CrowdHuman/annotation_val.odgt')
 
 class Config:
-    output_dir = 'outputs'
+    output_dir = os.path.join(os.path.dirname(__file__), 'outputs')
     model_dir = os.path.join(output_dir, 'model_dump')
     eval_dir = os.path.join(output_dir, 'eval_dump')
-    init_weights = '/data/model/resnet50_fbaug.pth'
+    init_weights = os.path.join(root_dir, 'lib/data/model/resnet50_fbaug.pth')
 
     # ----------data config---------- #
     image_mean = np.array([103.530, 116.280, 123.675])
@@ -44,7 +42,7 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    train_batch_per_gpu = 2
+    train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
     base_lr = 3.125e-4
@@ -52,7 +50,7 @@ class Config:
     focal_loss_gamma = 2
 
     warm_iter = 800
-    max_epoch = 50
+    max_epoch = 24
     lr_decay = [33, 43]
     nr_images_epoch = 15000
     log_dump_interval = 20
@@ -70,8 +68,10 @@ class Config:
 
     # --------anchor generator config-------- #
     anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
-    anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
-    anchor_aspect_ratios = [1, 2, 3]
+    # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
+    # anchor_aspect_ratios = [1, 2, 3]
+    anchor_base_scale = [2**0]
+    anchor_aspect_ratios = [1]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
