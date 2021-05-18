@@ -7,7 +7,7 @@ def add_path(path):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-root_dir = os.path.join(os.path.dirname(__file__), '../../')
+root_dir = os.path.dirname(__file__).split('model')[0]
 model_dir = os.path.dirname(__file__)
 
 class Crowd_human:
