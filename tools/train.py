@@ -122,7 +122,7 @@ def train_worker(rank, train_config, network, config):
                 state_dict = net.module.state_dict(),
                 optimizer = optimizer.state_dict())
             torch.save(model,fpath)
-        validate_all(epoch_id, train_config.log_path, config, network)
+            validate_all(epoch_id, train_config.log_path, config, network)
 
 def multi_train(params, config, network):
     # check gpus
@@ -174,7 +174,7 @@ def run_train():
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline',
     #                           '--resume_weights', '3'])
 
     # import libs
