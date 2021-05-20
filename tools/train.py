@@ -122,7 +122,6 @@ def train_worker(rank, train_config, network, config):
                 state_dict = net.module.state_dict(),
                 optimizer = optimizer.state_dict())
             torch.save(model,fpath)
-        validate_all(epoch_id, train_config.log_path, config, network)
 
 def multi_train(params, config, network):
     # check gpus
