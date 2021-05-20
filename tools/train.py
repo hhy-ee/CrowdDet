@@ -174,8 +174,7 @@ def run_train():
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
-                              '--resume_weights', '3'])
+    args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
