@@ -43,7 +43,7 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    train_batch_per_gpu = 8
+    train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-3
     base_lr = 3.125e-4
