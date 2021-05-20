@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 import torch
@@ -10,8 +10,10 @@ lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
 model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
 sys.path.insert(0, lib_dir)
 sys.path.insert(0, model_dir)
+
 from data.CrowdHuman import CrowdHuman
 from utils import misc_utils, SGD_bias
+from test import validate_all
 
 class Train_config:
     # size
@@ -111,7 +113,9 @@ def train_worker(rank, train_config, network, config):
             collate_fn=crowdhuman.merge_batch,
             shuffle=True)
     for epoch_id in range(begin_epoch, train_config.total_epoch+1):
+        validate_all(epoch_id-1, config, network)
         do_train_epoch(net, data_iter, optimizer, rank, epoch_id, train_config)
+        # validate_all(epoch_id, config, network)
         if rank == 0:
             #save the model
             fpath = os.path.join(train_config.model_dir,
@@ -165,13 +169,14 @@ def run_train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', '-md', default=None,required=True,type=str)
     parser.add_argument('--resume_weights', '-r', default=None,type=int)
-    os.environ['MASTER_ADDR'] = '127.0.0.2'
+    os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '8889'
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
-    args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline'])
+    # args = parser.parse_args()
+    args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
+                              '--resume_weights', '3'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

@@ -13,10 +13,10 @@ model_dir = os.path.dirname(__file__)
 class Crowd_human:
     class_names = ['background', 'person']
     num_classes = len(class_names)
-    root_folder = os.path.join(root_dir, 'lib/data/CrowdHuman')
-    image_folder = os.path.join(root_dir, 'lib/data/CrowdHuman/Images')
-    train_source = os.path.join(root_dir, 'lib/data/CrowdHuman/annotation_train.odgt')
-    eval_source = os.path.join(root_dir, 'lib/data/CrowdHuman/annotation_val.odgt')
+    root_folder = os.path.join(root_dir, 'data/CrowdHuman')
+    image_folder = os.path.join(root_dir, 'data/CrowdHuman/Images')
+    train_source = os.path.join(root_dir, 'data/CrowdHuman/annotation_train.odgt')
+    eval_source = os.path.join(root_dir, 'data/CrowdHuman/annotation_val.odgt')
 
 class Config:
     output_dir = os.path.join(model_dir, 'outputs')

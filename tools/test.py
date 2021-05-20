@@ -8,16 +8,21 @@ from tqdm import tqdm
 import torch
 from torch.multiprocessing import Queue, Process
 
-sys.path.insert(0, '../lib')
-sys.path.insert(0, '../model')
+# sys.path.insert(0, '../lib')
+# sys.path.insert(0, '../model')
+lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
+model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
+sys.path.insert(0, lib_dir)
+sys.path.insert(0, model_dir)
+
 from data.CrowdHuman import CrowdHuman
 from utils import misc_utils, nms_utils
 from evaluate import compute_JI, compute_APMR
 
 def eval_all(args, config, network):
     # model_path
-    saveDir = os.path.join('../model', args.model_dir, config.model_dir)
-    evalDir = os.path.join('../model', args.model_dir, config.eval_dir)
+    saveDir = config.model_dir
+    evalDir = config.eval_dir
     misc_utils.ensure_dir(evalDir)
     model_file = os.path.join(saveDir, 
             'dump-{}.pth'.format(args.resume_weights))
@@ -54,6 +59,56 @@ def eval_all(args, config, network):
     misc_utils.save_json_lines(all_results, fpath)
     # evaluation
     eval_path = os.path.join(evalDir, 'eval-{}.json'.format(args.resume_weights))
+    eval_fid = open(eval_path,'w')
+    res_line, JI = compute_JI.evaluation_all(fpath, 'box')
+    for line in res_line:
+        eval_fid.write(line+'\n')
+    AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
+    line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+    print(line)
+    eval_fid.write(line+'\n')
+    eval_fid.close()
+
+def validate_all(epoch_id, config, network):
+    # model_path
+    saveDir = config.model_dir
+    evalDir = config.eval_dir
+    misc_utils.ensure_dir(evalDir)
+    model_file = os.path.join(saveDir, 
+            'dump-{}.pth'.format(str(epoch_id)))
+    assert os.path.exists(model_file)
+    # get devices
+    str_devices = '0'
+    devices = misc_utils.device_parser(str_devices)
+    # load data
+    crowdhuman = CrowdHuman(config, if_train=False)
+    #crowdhuman.records = crowdhuman.records[:10]
+    # multiprocessing
+    num_devs = len(devices)
+    len_dataset = len(crowdhuman)
+    num_image = math.ceil(len_dataset / num_devs)
+    result_queue = Queue(500)
+    procs = []
+    all_results = []
+    for i in range(num_devs):
+        start = i * num_image
+        end = min(start + num_image, len_dataset)
+        proc = Process(target=inference, args=(
+                config, network, model_file, devices[i], crowdhuman, start, end, result_queue))
+        proc.start()
+        procs.append(proc)
+    pbar = tqdm(total=len_dataset, ncols=50)
+    for i in range(len_dataset):
+        t = result_queue.get()
+        all_results.append(t)
+        pbar.update(1)
+    pbar.close()
+    for p in procs:
+        p.join()
+    fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(epoch_id)))
+    misc_utils.save_json_lines(all_results, fpath)
+    # evaluation
+    eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(epoch_id)))
     eval_fid = open(eval_path,'w')
     res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     for line in res_line:
@@ -143,9 +198,13 @@ def run_test():
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--devices', '-d', default='0', type=str)
     os.environ['NCCL_IB_DISABLE'] = '1'
-    args = parser.parse_args()
+
+    # args = parser.parse_args()
+    args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
+                              '--resume_weights', '3'])
+
     # import libs
-    model_root_dir = os.path.join('../model/', args.model_dir)
+    model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
