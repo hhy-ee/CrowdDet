@@ -13,4 +13,4 @@
 **/*.jpeg
 **/*.png
 tools/runs
-/lib/data/
+data
