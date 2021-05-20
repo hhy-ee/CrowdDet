@@ -172,7 +172,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 4)
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 8)[:, :config.num_cell_anchors * 4]
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)

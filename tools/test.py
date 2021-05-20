@@ -69,7 +69,7 @@ def eval_all(args, config, network):
     eval_fid.write(line+'\n')
     eval_fid.close()
 
-def validate_all(epoch_id, config, network):
+def validate_all(epoch_id, log_path, config, network):
     # model_path
     saveDir = config.model_dir
     evalDir = config.eval_dir
@@ -118,6 +118,13 @@ def validate_all(epoch_id, config, network):
     print(line)
     eval_fid.write(line+'\n')
     eval_fid.close()
+    # write train log
+    fid_log = open(log_path,'a')
+    fid_log.write(line+'\n')
+    fid_log.flush()
+    fid_log.close()
+
+
 
 def inference(config, network, model_file, device, dataset, start, end, result_queue):
     torch.set_default_tensor_type('torch.FloatTensor')

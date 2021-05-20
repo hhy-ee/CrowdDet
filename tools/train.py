@@ -113,7 +113,7 @@ def train_worker(rank, train_config, network, config):
             collate_fn=crowdhuman.merge_batch,
             shuffle=True)
     for epoch_id in range(begin_epoch, train_config.total_epoch+1):
-        validate_all(epoch_id-1, config, network)
+        validate_all(epoch_id-1, train_config.log_path, config, network)
         do_train_epoch(net, data_iter, optimizer, rank, epoch_id, train_config)
         # validate_all(epoch_id, config, network)
         if rank == 0:
