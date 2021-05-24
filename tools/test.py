@@ -69,62 +69,58 @@ def eval_all(args, config, network):
     eval_fid.write(line+'\n')
     eval_fid.close()
 
-def validate_all(epoch_id, log_path, config, network):
-    # model_path
-    saveDir = config.model_dir
-    evalDir = config.eval_dir
-    misc_utils.ensure_dir(evalDir)
-    model_file = os.path.join(saveDir, 
-            'dump-{}.pth'.format(str(epoch_id)))
-    assert os.path.exists(model_file)
-    # get devices
-    str_devices = '0'
-    devices = misc_utils.device_parser(str_devices)
-    # load data
-    crowdhuman = CrowdHuman(config, if_train=False)
-    #crowdhuman.records = crowdhuman.records[:10]
-    # multiprocessing
-    num_devs = len(devices)
-    len_dataset = len(crowdhuman)
-    num_image = math.ceil(len_dataset / num_devs)
-    result_queue = Queue(500)
-    procs = []
-    all_results = []
-    for i in range(num_devs):
-        start = i * num_image
-        end = min(start + num_image, len_dataset)
-        proc = Process(target=inference, args=(
-                config, network, model_file, devices[i], crowdhuman, start, end, result_queue))
-        proc.start()
-        procs.append(proc)
-    pbar = tqdm(total=len_dataset, ncols=50)
-    for i in range(len_dataset):
-        t = result_queue.get()
-        all_results.append(t)
-        pbar.update(1)
-    pbar.close()
-    for p in procs:
-        p.join()
-    fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(epoch_id)))
-    misc_utils.save_json_lines(all_results, fpath)
-    # evaluation
-    eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(epoch_id)))
-    eval_fid = open(eval_path,'w')
-    res_line, JI = compute_JI.evaluation_all(fpath, 'box')
-    for line in res_line:
+def eval_all_epoch(args, config, network):
+    for i in range(1, args.resume_weights+1):
+        # model_path
+        saveDir = config.model_dir
+        evalDir = config.eval_dir
+        misc_utils.ensure_dir(evalDir)
+        model_file = os.path.join(saveDir, 
+                'dump-{}.pth'.format(str(i)))
+        assert os.path.exists(model_file)
+        # get devices
+        str_devices = '0'
+        devices = misc_utils.device_parser(str_devices)
+        # load data
+        crowdhuman = CrowdHuman(config, if_train=False)
+        #crowdhuman.records = crowdhuman.records[:10]
+        # multiprocessing
+        num_devs = len(devices)
+        # len_dataset = len(crowdhuman)
+        len_dataset = 10
+        num_image = math.ceil(len_dataset / num_devs)
+        result_queue = Queue(500)
+        procs = []
+        all_results = []
+        for i in range(num_devs):
+            start = i * num_image
+            end = min(start + num_image, len_dataset)
+            proc = Process(target=inference, args=(
+                    config, network, model_file, devices[i], crowdhuman, start, end, result_queue))
+            proc.start()
+            procs.append(proc)
+        pbar = tqdm(total=len_dataset, ncols=50)
+        for i in range(len_dataset):
+            t = result_queue.get()
+            all_results.append(t)
+            pbar.update(1)
+        pbar.close()
+        for p in procs:
+            p.join()
+        fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(i)))
+        misc_utils.save_json_lines(all_results, fpath)
+        # evaluation
+        eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(i)))
+        eval_fid = open(eval_path,'w')
+        # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
+        # for line in res_line:
+        #     eval_fid.write(line+'\n')
+        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
+        # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+        line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
+        print(line)
         eval_fid.write(line+'\n')
-    AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
-    line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
-    print(line)
-    eval_fid.write(line+'\n')
-    eval_fid.close()
-    # write train log
-    fid_log = open(log_path,'a')
-    fid_log.write(line+'\n')
-    fid_log.flush()
-    fid_log.close()
-
-
+        eval_fid.close()
 
 def inference(config, network, model_file, device, dataset, start, end, result_queue):
     torch.set_default_tensor_type('torch.FloatTensor')
@@ -208,7 +204,7 @@ def run_test():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
-    #                           '--resume_weights', '3'])
+    #                           '--resume_weights', '24'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
@@ -216,6 +212,7 @@ def run_test():
     from config import config
     from network import Network
     eval_all(args, config, Network)
+    # eval_all_epoch(args, config, Network)
 
 if __name__ == '__main__':
     run_test()
