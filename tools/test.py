@@ -1,4 +1,5 @@
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import sys
 import math
 import argparse
@@ -70,24 +71,23 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for i in range(1, args.resume_weights+1):
+    for epoch_id in range(1, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
         misc_utils.ensure_dir(evalDir)
         model_file = os.path.join(saveDir, 
-                'dump-{}.pth'.format(str(i)))
+                'dump-{}.pth'.format(str(epoch_id)))
         assert os.path.exists(model_file)
         # get devices
-        str_devices = '0'
+        str_devices = args.devices
         devices = misc_utils.device_parser(str_devices)
         # load data
         crowdhuman = CrowdHuman(config, if_train=False)
         #crowdhuman.records = crowdhuman.records[:10]
         # multiprocessing
         num_devs = len(devices)
-        # len_dataset = len(crowdhuman)
-        len_dataset = 10
+        len_dataset = len(crowdhuman)
         num_image = math.ceil(len_dataset / num_devs)
         result_queue = Queue(500)
         procs = []
@@ -107,17 +107,16 @@ def eval_all_epoch(args, config, network):
         pbar.close()
         for p in procs:
             p.join()
-        fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(i)))
+        fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(epoch_id)))
         misc_utils.save_json_lines(all_results, fpath)
         # evaluation
-        eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(i)))
+        eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(epoch_id)))
         eval_fid = open(eval_path,'w')
-        # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
-        # for line in res_line:
-        #     eval_fid.write(line+'\n')
+        res_line, JI = compute_JI.evaluation_all(fpath, 'box')
+        for line in res_line:
+            eval_fid.write(line+'\n')
         AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
-        # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
-        line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
+        line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
         print(line)
         eval_fid.write(line+'\n')
         eval_fid.close()
@@ -203,16 +202,17 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
-    #                           '--resume_weights', '24'])
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline',
+    #                           '--resume_weights', '3',
+    #                           '--devices', '0-1'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    eval_all(args, config, Network)
-    # eval_all_epoch(args, config, Network)
+    # eval_all(args, config, Network)
+    eval_all_epoch(args, config, Network)
 
 if __name__ == '__main__':
     run_test()

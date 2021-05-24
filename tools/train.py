@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import sys
 import argparse
 import torch
@@ -13,7 +13,7 @@ sys.path.insert(0, model_dir)
 
 from data.CrowdHuman import CrowdHuman
 from utils import misc_utils, SGD_bias
-from test import validate_all
+from test import eval_all_epoch
 
 class Train_config:
     # size
@@ -172,9 +172,9 @@ def run_train():
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
-    args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline',
-    #                           '--resume_weights', '3'])
+    # args = parser.parse_args()
+    args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_kll1e-3',
+                              '--resume_weights', '3'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
