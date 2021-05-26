@@ -36,7 +36,7 @@ def focal_loss(inputs, targets, alpha=-1, gamma=2):
 
 def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
-    return loss.sum(axis=1)
+    return kl_weight * loss.sum(axis=1)
 
 def emd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     # reshape
