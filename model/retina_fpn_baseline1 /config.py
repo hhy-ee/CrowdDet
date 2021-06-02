@@ -45,7 +45,7 @@ class Config:
     backbone_freeze_at = 2
     train_batch_per_gpu = 4
     momentum = 0.9
-    weight_decay = 1e-4
+    weight_decay = 1e-3
     base_lr = 3.125e-4
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
@@ -77,7 +77,6 @@ class Config:
 
     # ----------binding&training config---------- #
     smooth_l1_beta = 0.1
-    kl_weight = 1e-3
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
