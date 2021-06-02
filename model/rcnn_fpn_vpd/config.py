@@ -51,7 +51,7 @@ class Config:
     base_lr = 1e-3 * 1.25
 
     warm_iter = 800
-    max_epoch = 30
+    max_epoch = 24
     lr_decay = [24, 27]
     nr_images_epoch = 15000
     log_dump_interval = 20
@@ -85,6 +85,7 @@ class Config:
     # ----------binding&training config---------- #
     rpn_smooth_l1_beta = 1
     rcnn_smooth_l1_beta = 1
+    rpn_kld_beta = 1e-3
 
     num_sample_anchors = 256
     positive_anchor_ratio = 0.5
