@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 import sys
 import math
 import argparse
@@ -71,7 +71,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(20, int(args.resume_weights)+1):
+    for epoch_id in range(25, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -201,10 +201,10 @@ def run_test():
     parser.add_argument('--devices', '-d', default='0', type=str)
     os.environ['NCCL_IB_DISABLE'] = '1'
 
-    # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'rcnn_fpn_vpd',
-                              '--resume_weights', '30',
-                              '--devices', '0-1'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_vpd',
+    #                           '--resume_weights', '30',
+    #                           '--devices', '0-1'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
