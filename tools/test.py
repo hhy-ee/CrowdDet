@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 import sys
 import math
 import argparse
@@ -201,10 +201,10 @@ def run_test():
     parser.add_argument('--devices', '-d', default='0', type=str)
     os.environ['NCCL_IB_DISABLE'] = '1'
 
-    args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline',
-    #                           '--resume_weights', '3',
-    #                           '--devices', '0-1'])
+    # args = parser.parse_args()
+    args = parser.parse_args(['--model_dir', 'rcnn_fpn_vpd',
+                              '--resume_weights', '30',
+                              '--devices', '0-1'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
