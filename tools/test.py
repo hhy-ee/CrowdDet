@@ -71,7 +71,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(15, int(args.resume_weights)+1):
+    for epoch_id in range(20, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
