@@ -85,7 +85,7 @@ class Config:
     # ----------binding&training config---------- #
     rpn_smooth_l1_beta = 1
     rcnn_smooth_l1_beta = 1
-    rpn_kld_beta = 1e-3
+    rpn_kld_beta = 1e-4
 
     num_sample_anchors = 256
     positive_anchor_ratio = 0.5
