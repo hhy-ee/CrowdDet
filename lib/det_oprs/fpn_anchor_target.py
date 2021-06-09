@@ -62,6 +62,40 @@ def fpn_rpn_vpd_reshape(pred_cls_score_list, pred_bbox_list, pred_mean_list, pre
     final_pred_lstd = torch.cat(final_pred_lstd_list, dim=0)
     return final_pred_cls_score, final_pred_bbox, final_pred_mean, final_pred_lstd
 
+def fpn_rpn_gmvpd_mv_reshape(prior_mean_list, prior_lstd_list):
+    final_prior_mean_list = []
+    final_prior_lstd_list = []
+    for bid in range(config.train_batch_per_gpu):
+        batch_prior_mean_list = []
+        batch_prior_lstd_list = []
+        for i in range(len(prior_mean_list)):
+            prior_mean_perlvl = prior_mean_list[i][bid] \
+                .permute(1, 2, 0).reshape(-1, 4)
+            prior_lstd_perlvl = prior_lstd_list[i][bid] \
+                .permute(1, 2, 0).reshape(-1, 4)
+            batch_prior_mean_list.append(prior_mean_perlvl)
+            batch_prior_lstd_list.append(prior_lstd_perlvl)
+        batch_prior_mean = torch.cat(batch_prior_mean_list, dim=0)
+        batch_prior_lstd = torch.cat(batch_prior_lstd_list, dim=0)
+        final_prior_mean_list.append(batch_prior_mean)
+        final_prior_lstd_list.append(batch_prior_lstd)
+    final_prior_mean = torch.cat(final_prior_mean_list, dim=0)
+    final_prior_lstd = torch.cat(final_prior_lstd_list, dim=0)
+    return final_prior_mean, final_prior_lstd
+
+def fpn_rpn_gmvpd_qy_reshape(pred_bbox_qy_logit_list):
+    final_bbox_qy_logit_list = []
+    for bid in range(config.train_batch_per_gpu):
+        batch_bbox_qy_logit_list = []
+        for i in range(len(pred_bbox_qy_logit_list)):
+            pred_bbox_qy_logit_perlvl = pred_bbox_qy_logit_list[i][bid] \
+                .permute(1, 2, 0).reshape(-1, config.n_components)
+            batch_bbox_qy_logit_list.append(pred_bbox_qy_logit_perlvl)
+        batch_bbox_qy_logit = torch.cat(batch_bbox_qy_logit_list, dim=0)
+        final_bbox_qy_logit_list.append(batch_bbox_qy_logit)
+    final_bbox_qy_logit = torch.cat(final_bbox_qy_logit_list, dim=0)
+    return final_bbox_qy_logit
+
 def fpn_anchor_target_opr_core_impl(
         gt_boxes, im_info, anchors, allow_low_quality_matches=True):
     ignore_label = config.ignore_label

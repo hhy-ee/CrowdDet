@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn.functional as F
 from config import config
 
 def softmax_loss(score, label, ignore_label=-1):
@@ -37,6 +37,20 @@ def focal_loss(inputs, targets, alpha=-1, gamma=2):
 def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.sum(axis=1)
+
+def log_normal(x, mean, lstd):
+    var = lstd.mul(2).exp()
+    # log(2 * pi) = 1.8379
+    log_prob = -0.5 * torch.sum(1.8379 + torch.log(var) + torch.pow(x - mean, 2) / var, dim=1)
+    return log_prob
+
+def gmm_kld_loss(pred_box, pred_mean, pred_lstd, pred_prior_mean, pred_prior_lstd, kll_weight):
+    kl_loss = log_normal(pred_box, pred_mean, pred_lstd) - log_normal(pred_box, pred_prior_mean, pred_prior_lstd)
+    return kll_weight * kl_loss
+
+def gmm_nent_loss(pred_bbox_qy_logit, enl_weight):
+    nent_loss = (F.log_softmax(pred_bbox_qy_logit, dim=1) * F.softmax(pred_bbox_qy_logit, dim=1)).sum(axis=1)
+    return enl_weight * nent_loss
 
 def emd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     # reshape
