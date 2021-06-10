@@ -7,7 +7,7 @@ from config import config
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals, find_top_rpn_gmm_box
 from det_oprs.fpn_anchor_target import fpn_anchor_target
-from det_oprs.fpn_anchor_target import fpn_rpn_vpd_reshape, fpn_rpn_gmvpd_mv_reshape, fpn_rpn_gmvpd_qy_reshape
+from det_oprs.fpn_anchor_target import fpn_rpn_vpd_reshape, fpn_rpn_mgmvpd_mv_reshape, fpn_rpn_mgmvpd_qy_reshape
 
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, gmm_kld_loss, gmm_nent_loss
 
@@ -70,7 +70,7 @@ class RPN(nn.Module):
             all_anchors_list.append(layer_anchors)
         
         # variational inference
-        list_size = len(pred_bbox_mean_list)
+        list_size = len(features)
         if self.training:
             pred_bbox_list = []
             pred_mean_list = []
@@ -96,7 +96,7 @@ class RPN(nn.Module):
             valid_masks = rpn_labels >= 0
             pos_masks = rpn_labels > 0
             normalizer = 1 / valid_masks.sum().item()
-            pred_bbox_qy_logit = fpn_rpn_gmvpd_qy_reshape(pred_bbox_qy_logit_list)
+            pred_bbox_qy_logit = fpn_rpn_mgmvpd_qy_reshape(pred_bbox_qy_logit_list)
             negentropy_loss = gmm_nent_loss(pred_bbox_qy_logit[valid_masks], config.rpn_enl_beta)
             loss_rpn_enl = negentropy_loss.sum() * normalizer
             cls_weight = F.softmax(pred_bbox_qy_logit[valid_masks], dim=1)
@@ -110,7 +110,7 @@ class RPN(nn.Module):
                     pred_mean_list[n*f_size: (n+1)*f_size], 
                     pred_lstd_list[n*f_size: (n+1)*f_size],
                     )
-                pred_prior_mean, pred_prior_lstd = fpn_rpn_gmvpd_mv_reshape(
+                pred_prior_mean, pred_prior_lstd = fpn_rpn_mgmvpd_mv_reshape(
                     pred_prior_mean_list[n*f_size: (n+1)*f_size], 
                     pred_prior_lstd_list[n*f_size: (n+1)*f_size]
                     )

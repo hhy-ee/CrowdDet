@@ -36,7 +36,23 @@ def focal_loss(inputs, targets, alpha=-1, gamma=2):
 
 def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
-    return kl_weight * loss.sum(axis=1)
+    return kl_weight * loss.sum(axis=1) 
+
+def gmkl_loss(pred_mean, pred_lstd, kl_weight):
+    loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
+    return kl_weight * loss.sum(axis=1) / config.n_components
+
+def gmdl_loss(pred_mean, dl_weight):
+    pred_mean = pred_mean.reshape(-1, config.n_components, 4)
+    if config.n_components == 2:
+        dist = torch.pow((pred_mean[:, 0, 0:2] - pred_mean[:, 1, 0:2]), 2).sum(dim=1)
+    elif config.n_components == 3:
+        dist1 = torch.pow((pred_mean[:, 0, 0:2] - pred_mean[:, 1, 0:2]), 2).sum(dim=1)
+        dist2 = torch.pow((pred_mean[:, 0, 0:2] - pred_mean[:, 2, 0:2]), 2).sum(dim=1)
+        dist3 = torch.pow((pred_mean[:, 1, 0:2] - pred_mean[:, 2, 0:2]), 2).sum(dim=1)
+        dist = (dist1 + dist2 + dist3) / 3
+    loss = F.relu(config.maxdist - dist)
+    return dl_weight * loss
 
 def log_normal(x, mean, lstd):
     var = lstd.mul(2).exp()
