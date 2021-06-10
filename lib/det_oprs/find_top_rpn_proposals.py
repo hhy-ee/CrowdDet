@@ -73,3 +73,20 @@ def find_top_rpn_proposals(is_train, rpn_bbox_offsets_list, rpn_cls_prob_list,
     else:
         concated_rois = torch.cat(return_rois, axis=0)
         return concated_rois
+
+def find_top_rpn_gmm_box(pred_bbox_list, pred_cls_score_list, logit_list):
+    pred_bbox_list = [pred_bbox.unsqueeze(0) for pred_bbox in pred_bbox_list]
+    pred_cls_score_list = [pred_cls_score.unsqueeze(0) for pred_cls_score in pred_cls_score_list]
+    final_pred_bbox_list = []
+    final_pred_cls_score_list = []
+    top_index = [F.softmax(qy_logit, dim=1).topk(dim=1, k=config.n_components).indices for qy_logit in logit_list]
+    for l in range(len(top_index)):
+        pred_bbox_perlvl_list = pred_bbox_list[l:len(pred_bbox_list):len(top_index)]
+        pred_bbox_perlvl = torch.cat(pred_bbox_perlvl_list, dim=0)
+        pred_cls_score_perlvl_list = pred_cls_score_list[l:len(pred_bbox_list):len(top_index)]
+        pred_cls_score_perlvl = torch.cat(pred_cls_score_perlvl_list, dim=0)
+        top_index_perlvl = top_index[l].permute(1, 0, 2, 3).unsqueeze(2).repeat(1, 1, 4, 1, 1)
+        final_pred_bbox_list.append(torch.gather(pred_bbox_perlvl, 0, top_index_perlvl)[0, :])
+        top_index_perlvl = top_index[l].permute(1, 0, 2, 3).unsqueeze(2).repeat(1, 1, 2, 1, 1)
+        final_pred_cls_score_list.append(torch.gather(pred_cls_score_perlvl, 0, top_index_perlvl)[0, :])
+    return final_pred_bbox_list, final_pred_cls_score_list
