@@ -58,7 +58,14 @@ class RPN(nn.Module):
                 pred_mean_list.append(mean_perlvl)
                 pred_lstd_list.append(lstd_perlvl)
         else:
-            pred_bbox_list = [pred_bbox_offsets_list[l][:, :4*config.num_cell_anchors] for l in range(list_size)]
+            pred_bbox_list = []
+            for l in range(list_size):
+                mean_perlvl = pred_bbox_offsets_list[l][:, :config.num_cell_anchors * config.n_components * 4]
+                mean_perlvl = mean_perlvl.reshape(mean_perlvl.shape[0], config.n_components, 4, mean_perlvl.shape[2], mean_perlvl.shape[3])
+                weight_perlvl = pred_bbox_offsets_list[l][:, config.num_cell_anchors * config.n_components * 8:]
+                topindex_perlvl = weight_perlvl.topk(k=1, dim=1).indices.unsqueeze(2).repeat(1, 1, 4, 1, 1)
+                bbox_perlvl = torch.gather(mean_perlvl, 1, topindex_perlvl).squeeze(1)
+                pred_bbox_list.append(bbox_perlvl)
 
         # sample from the predictions
         rpn_rois = find_top_rpn_proposals(
