@@ -33,7 +33,6 @@ def eval_all(args, config, network):
     devices = misc_utils.device_parser(str_devices)
     # load data
     crowdhuman = CrowdHuman(config, if_train=False)
-    #crowdhuman.records = crowdhuman.records[:10]
     # multiprocessing
     num_devs = len(devices)
     len_dataset = len(crowdhuman)
@@ -83,8 +82,7 @@ def eval_all_epoch(args, config, network):
         str_devices = args.devices
         devices = misc_utils.device_parser(str_devices)
         # load data
-        crowdhuman = CrowdHuman(config, if_train=False)
-        #crowdhuman.records = crowdhuman.records[:10]
+        crowdhuman = CrowdHuman(config, if_train=False)]
         # multiprocessing
         num_devs = len(devices)
         len_dataset = len(crowdhuman)
@@ -202,9 +200,8 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_gm2_s1_vpd_gumbel_kll1e-3_dil1e-3_maxd0.02',
-    #                           '--resume_weights', '30',
-    #                           '--devices', '0-1'])
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline',
+    #                           '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

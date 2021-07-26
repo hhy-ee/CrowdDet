@@ -129,7 +129,6 @@ def multi_train(params, config, network):
         print('No GPU exists!')
         return
     else:
-
         num_gpus = torch.cuda.device_count()
     torch.set_default_tensor_type('torch.FloatTensor')
     # setting training config
@@ -172,9 +171,9 @@ def run_train():
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'rcnn_fpn_baseline'])
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-3'])
+    args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_HIE20'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
