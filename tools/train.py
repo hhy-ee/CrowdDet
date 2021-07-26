@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 import torch
@@ -171,9 +171,9 @@ def run_train():
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
-    # args = parser.parse_args()
+    args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'rcnn_fpn_baseline'])
-    args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_HIE20'])
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_HIE20'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

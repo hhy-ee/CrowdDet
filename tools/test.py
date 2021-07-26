@@ -82,7 +82,7 @@ def eval_all_epoch(args, config, network):
         str_devices = args.devices
         devices = misc_utils.device_parser(str_devices)
         # load data
-        crowdhuman = CrowdHuman(config, if_train=False)]
+        crowdhuman = CrowdHuman(config, if_train=False)
         # multiprocessing
         num_devs = len(devices)
         len_dataset = len(crowdhuman)
