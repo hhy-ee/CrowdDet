@@ -24,10 +24,10 @@ def smooth_l1_loss(pred, target, beta: float):
         loss = torch.where(in_mask, 0.5 * abs_x ** 2 / beta, abs_x - 0.5 * beta)
     return loss.sum(axis=1)
 
-def focal_loss(inputs, targets, alpha=-1, gamma=2):
+def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
     class_range = torch.arange(1, inputs.shape[1] + 1, device=inputs.device)
-    pos_pred = (1 - inputs) ** gamma * torch.log(inputs)
-    neg_pred = inputs ** gamma * torch.log(1 - inputs)
+    pos_pred = (1 - inputs) ** gamma * torch.log(inputs + eps)
+    neg_pred = inputs ** gamma * torch.log(1 - inputs + eps)
 
     pos_loss = (targets == class_range) * pos_pred * alpha
     neg_loss = (targets != class_range) * neg_pred * (1 - alpha)
