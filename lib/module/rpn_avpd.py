@@ -82,7 +82,6 @@ class RPN(nn.Module):
                 config.rpn_smooth_l1_beta)
             
             kldivergence_loss = kldiv_loss(
-                pred_bbox_offsets[valid_masks],
                 pred_mean[valid_masks],
                 pred_lstd[valid_masks],
                 config.rpn_kld_beta)

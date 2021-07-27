@@ -6,11 +6,11 @@ import numpy as np
 from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
-from module.rpn_pvpd import RPN
+from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
+from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -61,7 +61,7 @@ class RCNN(nn.Module):
             nn.init.constant_(l.bias, 0)
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
-        self.pred_delta = nn.Linear(1024, config.num_classes * 4)
+        self.pred_delta = nn.Linear(1024, config.num_classes * 8)
         for l in [self.pred_cls]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
@@ -85,22 +85,37 @@ class RCNN(nn.Module):
             fg_masks = labels > 0
             valid_masks = labels >= 0
             # multi class
-            pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
+            pred_delta = pred_delta.reshape(-1, config.num_classes, 8)
+            # variational inference
+            pred_mean = pred_delta[:, :, :4]
+            pred_lstd = pred_delta[:, :, 4:]
+            pred_delta = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
+
             fg_gt_classes = labels[fg_masks]
             pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
+            vl_gt_classes = labels[valid_masks]
+            pred_mean = pred_mean[valid_masks, vl_gt_classes, :]
+            pred_lstd = pred_lstd[valid_masks, vl_gt_classes, :]
+
             localization_loss = smooth_l1_loss(
                 pred_delta,
                 bbox_targets[fg_masks],
                 config.rcnn_smooth_l1_beta)
+            kldivergence_loss = kldiv_loss(
+                pred_mean,
+                pred_lstd,
+                config.kl_weight)
             # loss for classification
             objectness_loss = softmax_loss(pred_cls, labels)
             objectness_loss = objectness_loss * valid_masks
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer
             loss_rcnn_cls = objectness_loss.sum() * normalizer
+            loss_rcnn_kld = kldivergence_loss.sum() * normalizer
             loss_dict = {}
             loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
             loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
+            loss_dict['loss_rcnn_kld'] = loss_rcnn_kld
             return loss_dict
         else:
             class_num = pred_cls.shape[-1] - 1
