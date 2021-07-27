@@ -25,7 +25,8 @@ class Image(object):
             self._height = record["height"]
         if gtflag:
             self._gtNum = len(record["gtboxes"])
-            body_bbox, head_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
+            # body_bbox, head_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
+            body_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
             if self.eval_mode == 0:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
@@ -223,13 +224,14 @@ class Image(object):
                 if 'ignore' in rb['head_attr']:
                     if rb['head_attr']['ignore'] != 0:
                         head_tag = -1
-            head_bbox.append(np.hstack((rb['hbox'], head_tag)))
+            # head_bbox.append(np.hstack((rb['hbox'], head_tag)))
             body_bbox.append(np.hstack((rb['fbox'], body_tag)))
-        head_bbox = np.array(head_bbox)
-        head_bbox[:, 2:4] += head_bbox[:, :2]
+        # head_bbox = np.array(head_bbox)
+        # head_bbox[:, 2:4] += head_bbox[:, :2]
         body_bbox = np.array(body_bbox)
         body_bbox[:, 2:4] += body_bbox[:, :2]
-        return body_bbox, head_bbox
+        # return body_bbox, head_bbox
+        return body_bbox
 
     def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None):
         assert key_name in dict_input

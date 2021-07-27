@@ -208,7 +208,6 @@ def run_test():
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    # eval_all(args, config, Network)
     eval_all_epoch(args, config, Network)
 
 if __name__ == '__main__':
