@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import math
 import argparse
@@ -129,7 +129,7 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
     check_point = torch.load(model_file)
     net.load_state_dict(check_point['state_dict'])
     # init data
-    dataset.records = dataset.records[start:end];
+    dataset.records = dataset.records[start:end]
     data_iter = torch.utils.data.DataLoader(dataset=dataset, shuffle=False)
     # inference
     for (image, gt_boxes, im_info, ID) in data_iter:
@@ -200,15 +200,15 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_baseline',
-    #                           '--resume_weights', '25'])
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_HIE20',
+    #                           '--resume_weights', '20'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    eval_all(args, config, Network)
+    eval_all_epoch(args, config, Network)
 
 if __name__ == '__main__':
     run_test()
