@@ -199,9 +199,9 @@ def run_test():
     parser.add_argument('--devices', '-d', default='0', type=str)
     os.environ['NCCL_IB_DISABLE'] = '1'
 
-    # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-2',
-                              '--resume_weights', '20'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_HIE20',
+    #                           '--resume_weights', '20'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
