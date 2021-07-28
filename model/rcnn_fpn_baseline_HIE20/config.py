@@ -71,7 +71,7 @@ class Config:
     # ----------rois generator config---------- #
     anchor_base_size = 32
     anchor_base_scale = [1]
-    anchor_aspect_ratios = [1]
+    anchor_aspect_ratios = [1, 2, 3]
     num_cell_anchors = len(anchor_aspect_ratios)
     anchor_within_border = False
 
