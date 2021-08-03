@@ -110,11 +110,12 @@ def eval_all_epoch(args, config, network):
         # evaluation
         eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(epoch_id)))
         eval_fid = open(eval_path,'w')
-        res_line, JI = compute_JI.evaluation_all(fpath, 'box')
-        for line in res_line:
-            eval_fid.write(line+'\n')
+        # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
+        # for line in res_line:
+        #     eval_fid.write(line+'\n')
         AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
-        line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+        # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+        line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
         print(line)
         eval_fid.write(line+'\n')
         eval_fid.close()
