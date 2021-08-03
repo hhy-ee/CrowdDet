@@ -74,8 +74,8 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # variational inference
-        all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
-        all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
+        all_pred_mean = all_pred_reg[:, :4]
+        all_pred_lstd = all_pred_reg[:, 4:]
         all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
 
         # get ground truth
