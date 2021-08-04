@@ -173,7 +173,7 @@ def run_train():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'rcnn_fpn_baseline'])
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_mlanchor_kll1e-3'])
+    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_avpd1_kll1e-3'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
