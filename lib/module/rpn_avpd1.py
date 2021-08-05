@@ -57,7 +57,7 @@ class RPN(nn.Module):
                 pred_lstd_list.append(lstd_perlvl)
         else:
             pred_bbox_list = [pred_bbox_offsets_list[l][:, :4*config.num_cell_anchors] for l in range(list_size)]
-
+            pred_mean_list = pred_bbox_list
         # sample from the predictions
         rpn_rois = find_top_rpn_proposals(
                 self.training, pred_mean_list, pred_cls_score_list,
