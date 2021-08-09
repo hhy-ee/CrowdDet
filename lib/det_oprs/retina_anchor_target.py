@@ -59,12 +59,18 @@ def retina_avpd1_anchor_target(avpd_anchors, anchors, gt_boxes, im_info, top_k=1
         gt_boxes_perimg = gt_boxes[bid, :int(im_info[bid, 5]), :]
         batch_avpd_anchors = avpd_anchors[bid, :].type_as(gt_boxes_perimg)
         batch_anchors = anchors[bid, :].type_as(gt_boxes_perimg)
-        overlaps = box_overlap_opr(batch_avpd_anchors, gt_boxes_perimg[:, :-1])
+        overlaps = box_overlap_opr(batch_anchors, gt_boxes_perimg[:, :-1])
+        overlaps_avpd = box_overlap_opr(batch_avpd_anchors, gt_boxes_perimg[:, :-1])
         # gt max and indices
         max_overlaps, gt_assignment = overlaps.topk(top_k, dim=1, sorted=True)
         max_overlaps= max_overlaps.flatten()
         gt_assignment= gt_assignment.flatten()
         _, gt_assignment_for_gt = torch.max(overlaps, axis=0)
+        
+        max_overlaps_avpd, gt_assignment_avpd = overlaps_avpd.topk(top_k, dim=1, sorted=True)
+        max_overlaps_avpd= max_overlaps_avpd.flatten()
+        gt_assignment_avpd= gt_assignment_avpd.flatten()
+        _, gt_assignment_for_gt_avpd = torch.max(overlaps_avpd, axis=0)
         del overlaps
         # cons labels
         labels = gt_boxes_perimg[gt_assignment, 4]
@@ -77,10 +83,10 @@ def retina_avpd1_anchor_target(avpd_anchors, anchors, gt_boxes, im_info, top_k=1
         target_anchors = batch_anchors.repeat(1, top_k).reshape(-1, anchors.shape[-1])
         bbox_targets = bbox_transform_opr(target_anchors, target_boxes)
         if config.allow_low_quality:
-            labels[gt_assignment_for_gt] = gt_boxes_perimg[:, 4]
+            labels[gt_assignment_for_gt_avpd] = gt_boxes_perimg[:, 4]
             low_quality_bbox_targets = bbox_transform_opr(
-                batch_anchors[gt_assignment_for_gt], gt_boxes_perimg[:, :4])
-            bbox_targets[gt_assignment_for_gt] = low_quality_bbox_targets
+                batch_avpd_anchors[gt_assignment_for_gt_avpd], gt_boxes_perimg[:, :4])
+            bbox_targets[gt_assignment_for_gt_avpd] = low_quality_bbox_targets
         labels = labels.reshape(-1, 1 * top_k)
         bbox_targets = bbox_targets.reshape(-1, 4 * top_k)
         return_labels.append(labels)
@@ -105,28 +111,34 @@ def retina_avpd2_anchor_target(avpd_anchors, anchors, gt_boxes, im_info, top_k=1
         gt_boxes_perimg = gt_boxes[bid, :int(im_info[bid, 5]), :]
         batch_avpd_anchors = avpd_anchors[bid, :].type_as(gt_boxes_perimg)
         batch_anchors = anchors[bid, :].type_as(gt_boxes_perimg)
-        overlaps = box_overlap_opr(batch_avpd_anchors, gt_boxes_perimg[:, :-1])
+        overlaps = box_overlap_opr(batch_anchors, gt_boxes_perimg[:, :-1])
+        overlaps_avpd = box_overlap_opr(batch_avpd_anchors, gt_boxes_perimg[:, :-1])
         # gt max and indices
         max_overlaps, gt_assignment = overlaps.topk(top_k, dim=1, sorted=True)
         max_overlaps= max_overlaps.flatten()
         gt_assignment= gt_assignment.flatten()
         _, gt_assignment_for_gt = torch.max(overlaps, axis=0)
+        
+        max_overlaps_avpd, gt_assignment_avpd = overlaps_avpd.topk(top_k, dim=1, sorted=True)
+        max_overlaps_avpd= max_overlaps_avpd.flatten()
+        gt_assignment_avpd= gt_assignment_avpd.flatten()
+        _, gt_assignment_for_gt_avpd = torch.max(overlaps_avpd, axis=0)
         del overlaps
         # cons labels
-        labels = gt_boxes_perimg[gt_assignment, 4]
-        labels = labels * (max_overlaps >= config.negative_thresh)
-        ignore_mask = (max_overlaps < config.positive_thresh) * (
-                max_overlaps >= config.negative_thresh)
+        labels = gt_boxes_perimg[gt_assignment_avpd, 4]
+        labels = labels * (max_overlaps_avpd >= config.negative_thresh)
+        ignore_mask = (max_overlaps_avpd < config.positive_thresh) * (
+                max_overlaps_avpd >= config.negative_thresh)
         labels[ignore_mask] = -1
         # cons bbox targets
-        target_boxes = gt_boxes_perimg[gt_assignment, :4]
-        target_anchors = batch_avpd_anchors.repeat(1, top_k).reshape(-1, anchors.shape[-1])
+        target_boxes = gt_boxes_perimg[gt_assignment_avpd, :4]
+        target_anchors = batch_anchors.repeat(1, top_k).reshape(-1, anchors.shape[-1])
         bbox_targets = bbox_transform_opr(target_anchors, target_boxes)
         if config.allow_low_quality:
-            labels[gt_assignment_for_gt] = gt_boxes_perimg[:, 4]
+            labels[gt_assignment_for_gt_avpd] = gt_boxes_perimg[:, 4]
             low_quality_bbox_targets = bbox_transform_opr(
-                batch_avpd_anchors[gt_assignment_for_gt], gt_boxes_perimg[:, :4])
-            bbox_targets[gt_assignment_for_gt] = low_quality_bbox_targets
+                batch_avpd_anchors[gt_assignment_for_gt_avpd], gt_boxes_perimg[:, :4])
+            bbox_targets[gt_assignment_for_gt_avpd] = low_quality_bbox_targets
         labels = labels.reshape(-1, 1 * top_k)
         bbox_targets = bbox_targets.reshape(-1, 4 * top_k)
         return_labels.append(labels)
