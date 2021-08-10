@@ -8,7 +8,7 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.retina_anchor_target import retina_avpd2_anchor_target
+from det_oprs.retina_anchor_target import retina_avpd_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr 
 from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.utils import get_padded_tensor
@@ -75,14 +75,15 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
 
         # variational inference
-        all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
-        all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
-        all_pred_reg = all_pred_mean
+        all_pred_mean = all_pred_reg[:, config.num_cell_anchors * 2: config.num_cell_anchors * 4]
+        all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 6: config.num_cell_anchors * 8]
+        all_pred_reg = all_pred_reg[:, :config.num_cell_anchors * 4]
 
         # get ground truth
-        all_adeltas = torch.zeros_like(all_pred_lstd) + all_pred_lstd.exp() * torch.randn_like(all_pred_lstd)
+        all_adeltas = torch.zeros_like(all_pred_reg)
+        all_adeltas[:, 2:] = all_pred_lstd.exp() * torch.randn_like(all_pred_lstd)
         all_avpd_anchors = bbox_transform_inv_opr(all_anchors, all_adeltas)
-        labels, bbox_target = retina_avpd2_anchor_target(all_avpd_anchors, all_anchors, gt_boxes, im_info, top_k=1)
+        labels, bbox_target = retina_avpd_anchor_target(all_avpd_anchors, all_anchors, gt_boxes, im_info, top_k=1)
 
         # regression loss
         fg_mask = (labels > 0).flatten()
@@ -97,8 +98,8 @@ class RetinaNet_Criteria(nn.Module):
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
         loss_kld = kldiv_loss(
-                all_pred_mean[fg_mask],
-                all_pred_lstd[fg_mask],
+                all_pred_mean[valid_mask],
+                all_pred_lstd[valid_mask],
                 config.kl_weight)
 
         num_pos_anchors = fg_mask.sum().item()
