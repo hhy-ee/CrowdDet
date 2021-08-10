@@ -8,9 +8,9 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.retina_anchor_target import retina_vpd_anchor_target
+from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr 
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss
+from det_oprs.loss_opr import focal_loss, vpd_focal_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -79,9 +79,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
 
         # get ground truth
-        all_adeltas = torch.zeros_like(all_pred_mean) + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
-        all_anchors = bbox_transform_inv_opr(all_anchors.repeat(config.train_batch_per_gpu, 1), all_adeltas)
-        labels, bbox_target = retina_vpd_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
+        labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
         # regression loss
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
@@ -89,14 +87,15 @@ class RetinaNet_Criteria(nn.Module):
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 config.smooth_l1_beta)
-        loss_cls = focal_loss(
+        loss_cls = vpd_focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
+                all_pred_lstd[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
         loss_kld = kldiv_loss(
-                all_pred_mean[fg_mask],
-                all_pred_lstd[fg_mask],
+                all_pred_mean[valid_mask],
+                all_pred_lstd[valid_mask],
                 config.kl_weight)
 
         num_pos_anchors = fg_mask.sum().item()
