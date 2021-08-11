@@ -149,12 +149,21 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
             pred_boxes = pred_boxes[keep]
         elif config.test_nms_method == 'normal_nms':
-            assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
-            pred_boxes = pred_boxes.reshape(-1, 6)
+            if not config.save_data:
+                assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
+                pred_boxes = pred_boxes.reshape(-1, 6)
+            else:
+                pred_boxes = pred_boxes.reshape(-1, 10)
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
+            if config.save_data:
+                pred_scores = pred_boxes[:, 4].reshape(-1, 1)
+                pred_tags = pred_boxes[:, 5].reshape(-1, 1)
+                pred_lstd = pred_boxes[:, 6:]
+                save_data(pred_scores, pred_tags, pred_lstd)
+            pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
             pred_boxes = pred_boxes.reshape(-1, 6)
@@ -201,7 +210,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_pvpd_kll1e-3',
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-3',
     #                           '--resume_weights', '30'])
 
     # import libs
@@ -210,6 +219,15 @@ def run_test():
     from config import config
     from network import Network
     eval_all_epoch(args, config, Network)
+
+def save_data(scores, ious, dists):
+    import numpy as np
+    f = open("./vis_data.txt",'a')
+    data = torch.cat([scores, ious, dists], dim=1)
+    data = data.detach().cpu().numpy()
+    np.savetxt(f, data)
+    f.close()
+    return 0
 
 if __name__ == '__main__':
     run_test()

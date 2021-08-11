@@ -13,4 +13,5 @@
 **/*.jpeg
 **/*.png
 tools/runs
+vis_data.txt
 data
