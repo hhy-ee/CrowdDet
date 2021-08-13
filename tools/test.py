@@ -210,7 +210,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-3',
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-1',
     #                           '--resume_weights', '30'])
 
     # import libs
