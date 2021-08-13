@@ -60,11 +60,12 @@ def eval_all(args, config, network):
     # evaluation
     eval_path = os.path.join(evalDir, 'eval-{}.json'.format(args.resume_weights))
     eval_fid = open(eval_path,'w')
-    res_line, JI = compute_JI.evaluation_all(fpath, 'box')
-    for line in res_line:
-        eval_fid.write(line+'\n')
+    # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
+    # for line in res_line:
+    #     eval_fid.write(line+'\n')
     AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
-    line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+    # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+    line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
     print(line)
     eval_fid.write(line+'\n')
     eval_fid.close()
@@ -218,7 +219,7 @@ def run_test():
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    eval_all_epoch(args, config, Network)
+    eval_all(args, config, Network)
 
 def save_data(scores, ious, dists):
     import numpy as np
