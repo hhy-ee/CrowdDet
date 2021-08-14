@@ -81,6 +81,6 @@ class Config:
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
-    save_data= False
+    save_data= True
     
 config = Config()

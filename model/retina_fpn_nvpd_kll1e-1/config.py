@@ -77,7 +77,7 @@ class Config:
 
     # ----------binding&training config---------- #
     smooth_l1_beta = 0.1
-    kl_weight = 1e-3
+    kl_weight = 1e-1
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
