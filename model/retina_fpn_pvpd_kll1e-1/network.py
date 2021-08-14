@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss
+from det_oprs.loss_opr import vpd_focal_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -87,14 +87,15 @@ class RetinaNet_Criteria(nn.Module):
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 config.smooth_l1_beta)
-        loss_cls = focal_loss(
+        loss_cls = vpd_focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
+                all_pred_lstd[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
         loss_kld = kldiv_loss(
-                all_pred_mean[valid_mask],
-                all_pred_lstd[valid_mask],
+                all_pred_mean[fg_mask],
+                all_pred_lstd[fg_mask],
                 config.kl_weight)
 
         num_pos_anchors = fg_mask.sum().item()

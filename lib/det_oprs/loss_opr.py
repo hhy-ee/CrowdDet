@@ -51,10 +51,11 @@ def vpd_focal_loss(inputs, targets, lstd, alpha=-1, gamma=2, eps=1e-8):
 def vpd1_focal_loss(inputs, targets, lstd, alpha=-1, gamma=2, eps=1e-8):
     std = lstd.exp().mean(1).unsqueeze(1)
     class_range = torch.arange(1, inputs.shape[1] + 1, device=inputs.device)
+    
     pos_std = std[torch.where(targets==class_range)[0]]
     pos_norm_std = std/pos_std.max()
     neg_std = std[torch.where(targets!=class_range)[0]]
-    neg_norm_std = (neg_std.min() + eps)/std
+    neg_norm_std = (neg_std.min() + eps)/(std + eps)
     pos_pred = pos_norm_std ** gamma * torch.log(inputs + eps)
     neg_pred = neg_norm_std ** gamma * torch.log(1 - inputs + eps)
 
