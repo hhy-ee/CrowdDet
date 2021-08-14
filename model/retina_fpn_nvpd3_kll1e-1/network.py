@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr 
-from det_oprs.loss_opr import focal_loss, vpd1_focal_loss, smooth_l1_loss, kldiv_loss
+from det_oprs.loss_opr import focal_loss, vpd_focal_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -70,12 +70,13 @@ class RetinaNet_Criteria(nn.Module):
 
     def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info):
         all_anchors = torch.cat(anchors_list, axis=0)
-        all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
+        all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, (config.num_classes-1)*5)
         all_pred_cls = torch.sigmoid(all_pred_cls)
-        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
+        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4)
         # variational inference
-        all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
-        all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
+        all_pred_mean = all_pred_reg
+        all_pred_lstd = all_pred_cls[:, 1:]
+        all_pred_cls = all_pred_cls[:, 0:1]
         all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
 
         # get ground truth
@@ -87,7 +88,7 @@ class RetinaNet_Criteria(nn.Module):
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 config.smooth_l1_beta)
-        loss_cls = vpd1_focal_loss(
+        loss_cls = vpd_focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
                 all_pred_lstd[valid_mask],
@@ -132,7 +133,7 @@ class RetinaNet_Head(nn.Module):
         self.bbox_subnet = nn.Sequential(*bbox_subnet)
         # predictor
         self.cls_score = nn.Conv2d(
-            in_channels, config.num_cell_anchors * (config.num_classes-1),
+            in_channels, config.num_cell_anchors * (config.num_classes-1) * 5,
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
             in_channels, config.num_cell_anchors * 4,
@@ -158,10 +159,10 @@ class RetinaNet_Head(nn.Module):
         # reshape the predictions
         assert pred_cls[0].dim() == 4
         pred_cls_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
+            _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, (config.num_classes-1)*5)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4)
             for _ in pred_reg]
         return pred_cls_list, pred_reg_list
 
