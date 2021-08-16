@@ -8,9 +8,9 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.retina_anchor_target import retina_anchor_target
-from det_oprs.bbox_opr import bbox_transform_inv_opr 
-from det_oprs.loss_opr import focal_loss, vpd_focal_loss, smooth_l1_loss, kldiv_loss
+from det_oprs.retina_anchor_target import retina_anchor_target_new
+from det_oprs.bbox_opr import bbox_transform_inv_opr
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, pull_loss, push_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -70,17 +70,11 @@ class RetinaNet_Criteria(nn.Module):
 
     def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info):
         all_anchors = torch.cat(anchors_list, axis=0)
-        all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, (config.num_classes-1)*5)
+        all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4)
-        # variational inference
-        all_pred_mean = all_pred_reg
-        all_pred_lstd = all_pred_cls[:, 1:]
-        all_pred_cls = all_pred_cls[:, 0:1]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
-
         # get ground truth
-        labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
+        labels, bbox_target, pull_label, push_label = retina_anchor_target_new(all_anchors, gt_boxes, im_info, top_k=1)
         # regression loss
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
@@ -88,29 +82,32 @@ class RetinaNet_Criteria(nn.Module):
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 config.smooth_l1_beta)
-        loss_cls = vpd_focal_loss(
+        loss_cls = focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
-                all_pred_lstd[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_kld = kldiv_loss(
-                all_pred_mean[fg_mask],
-                all_pred_lstd[fg_mask],
-                config.kl_weight)
-
+        loss_pull = pull_loss(
+                pull_label, 
+                all_pred_reg,
+                all_anchors,
+                config.pull_loss_weight)
+        loss_push = push_loss(
+                push_label, 
+                all_pred_reg,
+                all_anchors,
+                config.push_loss_weight)
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
             ) * max(num_pos_anchors, 1)
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
-        loss_kld = loss_kld.sum() / self.loss_normalizer
-
         loss_dict = {}
         loss_dict['retina_focal_loss'] = loss_cls
         loss_dict['retina_smooth_l1'] = loss_reg
-        loss_dict['retina_kldiv_loss'] = loss_kld
+        loss_dict['retina_pull_loss'] = loss_pull
+        loss_dict['retina_push_l1'] = loss_push
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -133,7 +130,7 @@ class RetinaNet_Head(nn.Module):
         self.bbox_subnet = nn.Sequential(*bbox_subnet)
         # predictor
         self.cls_score = nn.Conv2d(
-            in_channels, config.num_cell_anchors * (config.num_classes-1) * 5,
+            in_channels, config.num_cell_anchors * (config.num_classes-1),
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
             in_channels, config.num_cell_anchors * 4,
@@ -159,7 +156,7 @@ class RetinaNet_Head(nn.Module):
         # reshape the predictions
         assert pred_cls[0].dim() == 4
         pred_cls_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, (config.num_classes-1)*5)
+            _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
             for _ in pred_cls]
         pred_reg_list = [
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4)
@@ -170,15 +167,11 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     keep_anchors = []
     keep_cls = []
     keep_reg = []
-    keep_lstd = []
-    class_num = len(config.class_names) - 1
+    class_num = pred_cls_list[0].shape[-1]
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
-        pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num * 5)
-        pred_lstd = pred_cls[:, 1:]
-        pred_cls = pred_cls[:, 0:1]
+        pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
         pred_reg = pred_reg_list[l_id][0].reshape(-1, 4)
-        
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
@@ -186,26 +179,20 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
             keep_anchors.append(anchors[inds])
             keep_cls.append(torch.sigmoid(pred_cls[inds]))
             keep_reg.append(pred_reg[inds])
-            keep_lstd.append(pred_lstd[inds])
         else:
             keep_anchors.append(anchors)
             keep_cls.append(torch.sigmoid(pred_cls))
             keep_reg.append(pred_reg)
-            keep_lstd.append(pred_lstd)
     keep_anchors = torch.cat(keep_anchors, axis = 0)
     keep_cls = torch.cat(keep_cls, axis = 0)
     keep_reg = torch.cat(keep_reg, axis = 0)
-    keep_lstd = torch.cat(keep_lstd, axis = 0)
     # multiclass
     tag = torch.arange(class_num).type_as(keep_cls)+1
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
     pred_scores = keep_cls.reshape(-1, 1)
     pred_bbox = restore_bbox(keep_anchors, keep_reg, False)
     pred_bbox = pred_bbox.repeat(1, class_num).reshape(-1, 4)
-    if config.save_data:
-        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_lstd], axis=1)
-    else:
-        pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
+    pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
     return pred_bbox
 
 def union_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
@@ -231,3 +218,4 @@ def restore_bbox(rois, deltas, unnormalize=True):
         deltas = deltas + mean_opr
     pred_bbox = bbox_transform_inv_opr(rois, deltas)
     return pred_bbox
+

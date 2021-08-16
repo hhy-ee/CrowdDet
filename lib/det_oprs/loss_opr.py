@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+from det_oprs.bbox_opr import bbox_transform_inv_opr
+from det_oprs.bbox_opr import box_overlap_opr
 from config import config
 
 def softmax_loss(score, label, ignore_label=-1):
@@ -63,6 +65,35 @@ def vpd1_focal_loss(inputs, targets, lstd, alpha=-1, gamma=2, eps=1e-8):
     neg_loss = (targets != class_range) * neg_pred * (1 - alpha)
     loss = -(pos_loss + neg_loss)
     return loss.sum(axis=1)
+
+def pull_loss(labels, regs, anchors, weight):
+    iou = 0.0
+    pair_num = 0
+    regs = regs.reshape(config.train_batch_per_gpu, -1, 4)
+    for bid in range(config.train_batch_per_gpu):
+        pull_label = labels[bid]
+        for pull_boxes_idx in pull_label:
+            pred_boxes = bbox_transform_inv_opr(anchors[pull_boxes_idx], regs[bid][pull_boxes_idx])
+            pull_iou = box_overlap_opr(pred_boxes, pred_boxes)
+            pull_iou_mask = torch.tril(torch.ones_like(pull_iou)).eq(0)
+            iou += pull_iou.mul(pull_iou_mask).sum() / pull_iou_mask.sum()
+        pair_num +=  len(pull_label)        
+    pull_loss = -(iou / pair_num).log()
+    return pull_loss * weight
+
+def push_loss(labels, regs, anchors, weight):
+    iou = 0.0
+    pair_num = 0
+    regs = regs.reshape(config.train_batch_per_gpu, -1, 4)
+    for bid in range(config.train_batch_per_gpu):
+        push_label = labels[bid]
+        for push_boxes_idx in push_label:
+            pos_boxes = bbox_transform_inv_opr(anchors[push_boxes_idx[0]], regs[bid][push_boxes_idx[0]])
+            neg_boxes = bbox_transform_inv_opr(anchors[push_boxes_idx[1]], regs[bid][push_boxes_idx[1]])
+            iou += box_overlap_opr(pos_boxes, neg_boxes).mean()
+        pair_num +=  len(push_label)
+    pull_loss = torch.relu(-torch.log((1 - iou / pair_num)/(1 - config.test_nms)))
+    return pull_loss * weight
 
 def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)

@@ -116,4 +116,3 @@ def box_overlap_ignore_opr(box, gt, ignore_label=-1):
     iou *= ~gt_ignore_mask
     ioa *= gt_ignore_mask
     return iou, ioa
-
