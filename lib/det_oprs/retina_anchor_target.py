@@ -112,7 +112,8 @@ def retina_anchor_target_new(anchors, gt_boxes, im_info, top_k=1):
             for i in range(overlap_gt[0].shape[0]):
                 pos_push_index = torch.where(new_gt_assignment==overlap_gt[0][i] + 1)[0]
                 neg_push_index = torch.where(new_gt_assignment==overlap_gt[1][i] + 1)[0]
-                push_loss_labels.append([pos_push_index, neg_push_index])
+                if pos_push_index.shape[0] != 0 and neg_push_index.shape[0] != 0:
+                    push_loss_labels.append([pos_push_index, neg_push_index])
 
         # list appending
         return_labels.append(labels)
