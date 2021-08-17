@@ -172,7 +172,7 @@ def run_train():
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_push_pull_loss'])
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_pull_push_loss'])
     # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-1'])
     
 
