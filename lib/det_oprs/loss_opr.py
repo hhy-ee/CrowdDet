@@ -77,8 +77,11 @@ def pull_loss(labels, regs, anchors, weight):
             pull_iou = box_overlap_opr(pred_boxes, pred_boxes)
             pull_iou_mask = torch.tril(torch.ones_like(pull_iou)).eq(0)
             iou += pull_iou.mul(pull_iou_mask).sum() / pull_iou_mask.sum()
-        pair_num +=  len(pull_label)        
-    pull_loss = -(iou / pair_num).log()
+        pair_num +=  len(pull_label)
+    if  pair_num != 0:
+        pull_loss = -(iou / pair_num).log()
+    else:
+        pull_loss = torch.tensor(0).type_as(regs)
     return pull_loss * weight
 
 def push_loss(labels, regs, anchors, weight):
@@ -92,8 +95,11 @@ def push_loss(labels, regs, anchors, weight):
             neg_boxes = bbox_transform_inv_opr(anchors[push_boxes_idx[1]], regs[bid][push_boxes_idx[1]])
             iou += box_overlap_opr(pos_boxes, neg_boxes).mean()
         pair_num +=  len(push_label)
-    pull_loss = torch.relu(-torch.log((1 - iou / pair_num)/(1 - config.test_nms)))
-    return pull_loss * weight
+    if pair_num != 0:
+        push_loss = torch.relu(-torch.log((1 - iou / pair_num)/(1 - config.test_nms)))
+    else:
+        push_loss = torch.tensor(0).type_as(regs)
+    return push_loss * weight
 
 def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
