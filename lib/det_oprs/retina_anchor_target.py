@@ -63,11 +63,15 @@ def retina_anchor_target_new(anchors, gt_boxes, im_info, top_k=1):
         max_overlaps, gt_assignment = overlaps.topk(top_k, dim=1, sorted=True)
         max_overlaps= max_overlaps.flatten()
         gt_assignment= gt_assignment.flatten()
-        gt_assignment_for_gt = torch.zeros(overlaps.shape[1]).type_as(gt_assignment)
-        max_iou_gt = torch.max(overlaps, axis=0).values.sort(descending=True).indices
-        for i in range(overlaps.shape[1]):
-            gt_assignment_for_gt[max_iou_gt[i]] = torch.argmax(overlaps[:, max_iou_gt[i]])
-            overlaps[gt_assignment_for_gt[max_iou_gt[i]], :] = 0
+
+        # gt_assignment_for_gt = torch.zeros(overlaps.shape[1]).type_as(gt_assignment)
+        # max_iou_gt = torch.max(overlaps, axis=0).values.sort(descending=True).indices
+        # for i in range(overlaps.shape[1]):
+        #     gt_assignment_for_gt[max_iou_gt[i]] = torch.argmax(overlaps[:, max_iou_gt[i]])
+        #     overlaps[gt_assignment_for_gt[max_iou_gt[i]], :] = 0
+
+        _, gt_assignment_for_gt = torch.max(overlaps, axis=0)
+
         del overlaps
         # cons labels
         labels = gt_boxes_perimg[gt_assignment, 4]
@@ -85,6 +89,8 @@ def retina_anchor_target_new(anchors, gt_boxes, im_info, top_k=1):
                 anchors[gt_assignment_for_gt], gt_boxes_perimg[:, :4])
             bbox_targets[gt_assignment_for_gt] = low_quality_bbox_targets
         labels = labels.reshape(-1, 1 * top_k)
+        bbox_targets = bbox_targets.reshape(-1, 4 * top_k)
+        
         # pull loss
         gt_assignment[gt_assignment_for_gt] = torch.arange(gt_boxes_perimg.shape[0]).type_as(gt_assignment)
         new_gt_assignment = torch.zeros_like(gt_assignment, dtype=torch.int64)
@@ -93,6 +99,7 @@ def retina_anchor_target_new(anchors, gt_boxes, im_info, top_k=1):
         for gt in torch.where(gt_boxes_perimg[:, 4]==1)[0]:
             if len(torch.where(new_gt_assignment == gt + 1)[0]) > 1:
                 pull_loss_labels.append(torch.where(new_gt_assignment == gt+1)[0])
+
         # push loss
         gt_overlaps = box_overlap_opr(gt_boxes_perimg[:,:4], gt_boxes_perimg[:,:4])
         gt_ignore_mask = gt_boxes_perimg[:, 4].eq(-1).repeat(gt_boxes_perimg.shape[0], 1)
@@ -107,7 +114,7 @@ def retina_anchor_target_new(anchors, gt_boxes, im_info, top_k=1):
                 neg_push_index = torch.where(new_gt_assignment==overlap_gt[1][i] + 1)[0]
                 push_loss_labels.append([pos_push_index, neg_push_index])
 
-        bbox_targets = bbox_targets.reshape(-1, 4 * top_k)
+        # list appending
         return_labels.append(labels)
         return_bbox_targets.append(bbox_targets)
         return_pull_loss_labels.append(pull_loss_labels)
