@@ -171,7 +171,7 @@ def run_train():
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
-    # args = parser.parse_args()
+    args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_mlanchor_mmdet'])
     # args = parser.parse_args(['--model_dir', 'retina_fpn_pvpd_kll1e-1'])
     
