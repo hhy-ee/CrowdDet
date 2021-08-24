@@ -101,8 +101,8 @@ def push_loss(labels, regs, anchors, weight):
         push_loss = torch.tensor(0).type_as(regs)
     return weight * push_loss
 
-def kldiv_loss(pred_lstd, kl_weight):
-    loss = (1 + pred_lstd.mul(2)- pred_lstd.mul(2).exp()).mul(-0.5)
+def kldiv_loss(pred_mean, pred_lstd, kl_weight):
+    loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.sum(axis=1) 
 
 def iouvar_loss(anchors, bbox_target, reg_samples, iouvar_weight):
