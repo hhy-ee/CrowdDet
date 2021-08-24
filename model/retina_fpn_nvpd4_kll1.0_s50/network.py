@@ -100,6 +100,7 @@ class RetinaNet_Criteria(nn.Module):
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
         loss_kld = kldiv_loss(
+                all_pred_mean[valid_mask],
                 all_pred_lstd[valid_mask],
                 config.kl_weight)
         # loss_var = iouvar_loss(
