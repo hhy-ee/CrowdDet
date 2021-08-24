@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.bbox_opr import box_overlap_opr
+from det_oprs.bbox_opr import box_overlap_opr, align_giou_opr
 from config import config
 
 def softmax_loss(score, label, ignore_label=-1):
@@ -82,7 +82,7 @@ def pull_loss(labels, regs, anchors, weight):
         pull_loss = -(iou / pair_num).log()
     else:
         pull_loss = torch.tensor(0).type_as(regs)
-    return pull_loss * weight
+    return weight * pull_loss
 
 def push_loss(labels, regs, anchors, weight):
     iou = 0.0
@@ -99,19 +99,17 @@ def push_loss(labels, regs, anchors, weight):
         push_loss = torch.relu(-torch.log((1 - iou / pair_num)/(1 - config.test_nms)))
     else:
         push_loss = torch.tensor(0).type_as(regs)
-    return push_loss * weight
+    return weight * push_loss
 
-def kldiv_loss(pred_mean, pred_lstd, kl_weight):
-    loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
+def kldiv_loss(pred_lstd, kl_weight):
+    loss = (1 + pred_lstd.mul(2)- pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.sum(axis=1) 
 
-def kldiv_prior_loss(pred_mean, pred_lstd, prior_std, kl_weight):
-    # loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
-    prior_std = prior_std.unsqueeze(1)
-    loss = (1 + pred_lstd.mul(2) - 2 * torch.ones_like(pred_lstd).mul(prior_std).log() - 
-                        (pred_mean.pow(2) + pred_lstd.mul(2).exp()).div(prior_std**2)).mul(-0.5)
-                                        
-    return kl_weight * loss.sum(axis=1)
+def iouvar_loss(anchors, bbox_target, reg_samples, iouvar_weight):
+    target_bbox = bbox_transform_inv_opr(anchors, bbox_target)
+    samples_iou = align_giou_opr(reg_samples.reshape(-1, 4), target_bbox.repeat(config.sample_num,1))
+    var_loss = torch.var(samples_iou.reshape(config.sample_num , -1), dim=0)
+    return iouvar_weight * var_loss 
 
 def gmkl_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)

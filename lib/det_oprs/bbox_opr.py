@@ -109,6 +109,28 @@ def align_box_overlap_opr(box, gt):
     )
     return iou
 
+def align_giou_opr(box, gt):
+    assert box.ndim == 2
+    assert gt.ndim == 2
+    area_box = (box[:, 2] - box[:, 0] + 1) * (box[:, 3] - box[:, 1] + 1)
+    area_gt = (gt[:, 2] - gt[:, 0] + 1) * (gt[:, 3] - gt[:, 1] + 1)
+    width_height_i = torch.min(box[:, 2:], gt[:, 2:]) - torch.max(box[:, :2], gt[:, :2]) + 1
+    width_height_o = torch.max(box[:, 2:], gt[:, 2:]) - torch.min(box[:, :2], gt[:, :2]) + 1
+    width_height_i.clamp_(min=0)  # [N,M,2]
+    width_height_o.clamp_(min=0)  # [N,M,2]
+    inter = width_height_i.prod(dim=1)  # [N,M]
+    outer = width_height_o.prod(dim=1)
+    del width_height_i, width_height_o
+    # handle empty boxes
+    iou = torch.where(
+        inter > 0,
+        inter / (area_box + area_gt - inter),
+        torch.zeros(1, dtype=inter.dtype, device=inter.device),
+    )
+    giou = iou - (outer - (area_box + area_gt - inter)) / outer
+    return giou
+
+
 def box_overlap_ignore_opr(box, gt, ignore_label=-1):
     assert box.ndim == 2
     assert gt.ndim == 2

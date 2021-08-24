@@ -10,9 +10,9 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr 
-from det_oprs.loss_opr import focal_loss, vpd_focal_loss, smooth_l1_loss, kldiv_prior_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss, iouvar_loss
 from det_oprs.utils import get_padded_tensor
-from det_oprs.bbox_opr import align_box_overlap_opr, bbox_transform_inv_opr
+from det_oprs.bbox_opr import align_giou_opr, bbox_transform_inv_opr
 
 class Network(nn.Module):
     def __init__(self):
@@ -71,28 +71,23 @@ class RetinaNet_Criteria(nn.Module):
         self.sigma = 0.1
 
     def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info):
-        all_anchors = torch.cat(anchors_list, axis=0)
+        anchors = torch.cat(anchors_list, axis=0)
+        all_anchors = anchors.repeat(config.train_batch_per_gpu, 1)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
+        
+        # get ground truth
+        labels, bbox_target = retina_anchor_target(anchors, gt_boxes, im_info, top_k=1)
+        # regression loss
+        fg_mask = (labels > 0).flatten()
+
         # variational inference
         all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
         all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
-
-        # get ground truth
-        labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
-        # regression loss
-        fg_mask = (labels > 0).flatten()
-        anchors = all_anchors.repeat(config.train_batch_per_gpu, 1)
-        target_bbox = bbox_transform_inv_opr(anchors, bbox_target)
-        # case 1
-        # prior_overlap = align_box_overlap_opr(anchors, target_bbox)
-        # case 2
-        pred_bbox = bbox_transform_inv_opr(anchors, all_pred_reg)
-        prior_overlap = align_box_overlap_opr(pred_bbox, target_bbox)
-        # compute prior
-        all_prior_lstd = 1 / (prior_overlap / self.sigma).exp()
+        all_pred_reg_samples = all_pred_mean.unsqueeze(0) + all_pred_lstd.exp().unsqueeze(0) * \
+                                torch.randn_like(all_pred_mean.unsqueeze(0).repeat(config.sample_num,1,1))
+        all_pred_reg = all_pred_reg_samples.mean(0)
 
         valid_mask = (labels >= 0).flatten()
         loss_reg = smooth_l1_loss(
@@ -104,11 +99,16 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_kld = kldiv_prior_loss(
-                all_pred_mean[valid_mask],
+        loss_kld = kldiv_loss(
                 all_pred_lstd[valid_mask],
-                all_prior_lstd[valid_mask],
                 config.kl_weight)
+        # loss_var = iouvar_loss(
+        #         all_anchors[fg_mask],
+        #         bbox_target[fg_mask],
+        #         all_pred_reg_samples[:, fg_mask],
+        #         config.iouvar_weight
+        # )
+
 
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
@@ -117,11 +117,13 @@ class RetinaNet_Criteria(nn.Module):
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
         loss_kld = loss_kld.sum() / self.loss_normalizer
+        # loss_var = loss_var.sum() / self.loss_normalizer
 
         loss_dict = {}
         loss_dict['retina_focal_loss'] = loss_cls
         loss_dict['retina_smooth_l1'] = loss_reg
         loss_dict['retina_kldiv_loss'] = loss_kld
+        # loss_dict['retina_iouvar_loss'] = loss_var
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
