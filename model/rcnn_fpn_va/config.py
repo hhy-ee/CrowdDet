@@ -103,7 +103,7 @@ class Config:
     save_data = False
     
     # ----------my config---------- #
-    va_sample_ratio = 0.8
+    va_sample_ratio = 1.0
 
 config = Config()
 

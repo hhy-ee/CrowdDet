@@ -63,7 +63,9 @@ def va_roi_align(features, boxes, dists, side_size, feature_scales, sample_ratio
         point_coords_scaled = point_coords_wrt_image / scale
         va_feature = point_sample(feature, point_coords_scaled, align_corners=False)
         va_features.append(va_feature)
-    return torch.cat(va_features, dim=0).reshape(num_boxes, -1, side_size[0], side_size[1])
+    output_features = torch.cat(va_features, dim=0)
+    output_features = output_features.reshape(num_boxes, feature.shape[0], side_size[0], side_size[1])
+    return output_features
 
 
 def va_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ratio):

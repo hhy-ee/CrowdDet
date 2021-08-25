@@ -104,7 +104,7 @@ def train_worker(rank, train_config, network, config):
         net.load_state_dict(check_point['state_dict'])
         begin_epoch = train_config.resume_weights + 1
     # using distributed data parallel
-    net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[rank], broadcast_buffers=False)
+    net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[rank], broadcast_buffers=False, find_unused_parameters=True)
     # build data provider
     crowdhuman = CrowdHuman(config, if_train=True)
     data_iter = torch.utils.data.DataLoader(dataset=crowdhuman,
