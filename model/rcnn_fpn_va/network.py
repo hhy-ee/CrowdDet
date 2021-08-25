@@ -7,9 +7,9 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from module.rpn_va import RPN
-from layers.pooler import roi_pooler
+from layers.va_pooler import va_roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.fpn_roi_target import fpn_roi_target
+from det_oprs.fpn_roi_target import fpn_roi_target_va
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
 from det_oprs.utils import get_padded_tensor
 
@@ -34,10 +34,10 @@ class Network(nn.Module):
         loss_dict = {}
         fpn_fms = self.FPN(image)
         # fpn_fms stride: 64,32,16,8,4, p6->p2
-        rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
-        rcnn_rois, rcnn_labels, rcnn_bbox_targets = fpn_roi_target(
-                rpn_rois, im_info, gt_boxes, top_k=1)
-        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois,
+        rpn_rois, rpn_dists, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
+        rcnn_rois, rcnn_dists, rcnn_labels, rcnn_bbox_targets = fpn_roi_target_va(
+                rpn_rois, rpn_dists, im_info, gt_boxes, top_k=1)
+        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois, rcnn_dists,
                 rcnn_labels, rcnn_bbox_targets)
         loss_dict.update(loss_dict_rpn)
         loss_dict.update(loss_dict_rcnn)
@@ -69,12 +69,13 @@ class RCNN(nn.Module):
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
 
-    def forward(self, fpn_fms, rcnn_rois, labels=None, bbox_targets=None):
+    def forward(self, fpn_fms, rcnn_rois, rcnn_dists, labels=None, bbox_targets=None):
         # input p2-p5
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
-        pool_features = roi_pooler(fpn_fms, rcnn_rois, stride, (7, 7), "ROIAlignV2")
-        flatten_feature = torch.flatten(pool_features, start_dim=1)
+        # pool_features = roi_pooler(fpn_fms, rcnn_rois, stride, (7, 7), "ROIAlignV2")
+        va_pool_features = va_roi_pooler(fpn_fms, rcnn_rois, rcnn_dists, stride, (7, 7), config.va_sample_ratio)
+        flatten_feature = torch.flatten(va_pool_features, start_dim=1)
         flatten_feature = F.relu_(self.fc1(flatten_feature))
         flatten_feature = F.relu_(self.fc2(flatten_feature))
         pred_cls = self.pred_cls(flatten_feature)

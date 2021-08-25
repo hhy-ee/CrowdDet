@@ -5,7 +5,7 @@ import numpy as np
 
 from config import config
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals
+from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals_va
 from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_reshape
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
 
@@ -45,10 +45,11 @@ class RPN(nn.Module):
             off_stride = off_stride // 2
             all_anchors_list.append(layer_anchors)
         # sample from the predictions
-        rpn_rois = find_top_rpn_proposals(
-                self.training, pred_bbox_offsets_list, pred_cls_score_list,
-                all_anchors_list, im_info)
+        rpn_rois, rpn_dists = find_top_rpn_proposals_va(
+                self.training, pred_bbox_offsets_list, pred_cls_score_list, 
+                pred_bbox_dist_list, all_anchors_list, im_info)
         rpn_rois = rpn_rois.type_as(features[0])
+        rpn_dists = rpn_dists.type_as(features[0])
         if self.training:
             rpn_labels, rpn_bbox_targets = fpn_anchor_target(
                     boxes, im_info, all_anchors_list)
@@ -72,7 +73,7 @@ class RPN(nn.Module):
             loss_dict = {}
             loss_dict['loss_rpn_cls'] = loss_rpn_cls
             loss_dict['loss_rpn_loc'] = loss_rpn_loc
-            return rpn_rois, loss_dict
+            return rpn_rois, rpn_dists, loss_dict
         else:
-            return rpn_rois
+            return rpn_rois, rpn_dists
 

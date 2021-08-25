@@ -102,5 +102,8 @@ class Config:
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
     save_data = False
     
+    # ----------my config---------- #
+    va_sample_ratio = 0.8
+
 config = Config()
 
