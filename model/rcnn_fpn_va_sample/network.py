@@ -7,7 +7,8 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from module.rpn_va import RPN
-from layers.va_pooler import va_roi_pooler
+from layers.va_pooler import va_sampling_roi_pooler
+from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target_va
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
@@ -45,8 +46,8 @@ class Network(nn.Module):
 
     def _forward_test(self, image, im_info):
         fpn_fms = self.FPN(image)
-        rpn_rois = self.RPN(fpn_fms, im_info)
-        pred_bbox = self.RCNN(fpn_fms, rpn_rois)
+        rpn_rois, rpn_dists = self.RPN(fpn_fms, im_info)
+        pred_bbox = self.RCNN(fpn_fms, rpn_rois, rpn_dists)
         return pred_bbox.cpu().detach()
 
 class RCNN(nn.Module):
@@ -73,14 +74,14 @@ class RCNN(nn.Module):
         # input p2-p5
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
-        # pool_features = roi_pooler(fpn_fms, rcnn_rois, stride, (7, 7), "ROIAlignV2")
-        va_pool_features = va_roi_pooler(fpn_fms, rcnn_rois, rcnn_dists, stride, (7, 7), config.va_sample_ratio)
+        va_pool_features = va_sampling_roi_pooler(fpn_fms, rcnn_rois, rcnn_dists, stride, (7, 7), config.va_sample_ratio)
         flatten_feature = torch.flatten(va_pool_features, start_dim=1)
         flatten_feature = F.relu_(self.fc1(flatten_feature))
         flatten_feature = F.relu_(self.fc2(flatten_feature))
         pred_cls = self.pred_cls(flatten_feature)
         pred_delta = self.pred_delta(flatten_feature)
-        if self.training:
+
+        if self.training:    
             # loss for regression
             labels = labels.long().flatten()
             fg_masks = labels > 0

@@ -10,6 +10,11 @@ def point_sample(input, point_coords, **kwargs):
     output = F.grid_sample(input, 2.0 * point_coords - 1.0, **kwargs)
     return output.squeeze(0).transpose(1, 0)
 
+def generate_regular_grid_point_coords(R, side_size, device):
+    aff = torch.tensor([[[0.5, 0, 0.5], [0, 0.5, 0.5]]], device=device)
+    r = F.affine_grid(aff, torch.Size((1, 1, side_size[0], side_size[1])), align_corners=False)
+    return r.view(1, -1, 2).expand(R, -1, -1)
+
 def get_point_coords_wrt_image(boxes_coords, point_coords):
     with torch.no_grad():
         point_coords_wrt_image = point_coords.clone()
@@ -22,6 +27,18 @@ def get_point_coords_wrt_image(boxes_coords, point_coords):
         point_coords_wrt_image[:, :, 0] += boxes_coords[:, None, 0]
         point_coords_wrt_image[:, :, 1] += boxes_coords[:, None, 1]
     return point_coords_wrt_image
+
+
+def generate_mask_for_dists(point_coords, mask_dists, pool_shape):
+    mask_dists = mask_dists.unsqueeze(1).repeat(1, pool_shape[0]*pool_shape[1], 1)
+    beta_x_c0, beta_x_c1, beta_y_c0, beta_y_c1 = torch.split(mask_dists.sigmoid() * 0.1 + 1, 1, dim=-1)
+    point_coords_x , point_coords_y = torch.split(point_coords, 1, dim=-1)
+    dist_x = torch.distributions.beta.Beta(beta_x_c0, beta_x_c1)
+    dist_y = torch.distributions.beta.Beta(beta_y_c0, beta_y_c1)
+    prob_x = dist_x.log_prob(point_coords_x).exp()
+    prob_y = dist_y.log_prob(point_coords_y).exp()
+    prob_mask = (prob_x * prob_y).permute(0, 2, 1).reshape(point_coords.shape[0], 1, pool_shape[0], pool_shape[1])
+    return prob_mask
 
 def assign_boxes_to_levels(rois, min_level, max_level, canonical_box_size=224, canonical_level=4):
     """
@@ -68,7 +85,7 @@ def va_roi_align(features, boxes, dists, side_size, feature_scales, sample_ratio
     return output_features
 
 
-def va_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ratio):
+def va_samling_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ratio):
     assert len(fpn_fms) == len(stride)
     max_level = int(math.log2(stride[-1]))
     min_level = int(math.log2(stride[0]))
@@ -89,3 +106,25 @@ def va_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ratio):
                 1.0/scale_level, va_sample_ratio)
     return output
 
+def va_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape):
+    assert len(fpn_fms) == len(stride)
+    max_level = int(math.log2(stride[-1]))
+    min_level = int(math.log2(stride[0]))
+    assert (len(stride) == max_level - min_level + 1)
+    level_assignments = assign_boxes_to_levels(rois, min_level, max_level, 224, 4)
+    dtype, device = fpn_fms[0].dtype, fpn_fms[0].device
+    output = torch.zeros((len(rois), fpn_fms[0].shape[1], pool_shape[0], pool_shape[1]),
+            dtype=dtype, device=device)
+    for level, (fm_level, scale_level) in enumerate(zip(fpn_fms, stride)):
+        inds = torch.nonzero(level_assignments == level, as_tuple=False).squeeze(1)
+        rois_level = rois[inds]
+        dists_level = dists[inds]
+        gt_roi_ind = torch.where(dists_level[:, 1:].sum(1) == 0)[0]
+        pr_roi_ind = torch.where(dists_level[:, 1:].sum(1) != 0)[0]
+        point_coords = generate_regular_grid_point_coords(len(inds), pool_shape, device)
+        mask = generate_mask_for_dists(point_coords[pr_roi_ind], dists_level[pr_roi_ind, 1:], pool_shape)
+        output[gt_roi_ind] = roi_align(fm_level, rois_level[gt_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
+                sampling_ratio=-1, aligned=True)
+        output[pr_roi_ind] = roi_align(fm_level, rois_level[pr_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
+                sampling_ratio=-1, aligned=True) * mask
+    return output
