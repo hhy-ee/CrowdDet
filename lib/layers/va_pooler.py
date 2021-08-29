@@ -31,7 +31,7 @@ def get_point_coords_wrt_image(boxes_coords, point_coords):
 
 def generate_mask_for_dists(point_coords, mask_dists, pool_shape):
     mask_dists = mask_dists.unsqueeze(1).repeat(1, pool_shape[0]*pool_shape[1], 1)
-    beta_x_c0, beta_x_c1, beta_y_c0, beta_y_c1 = torch.split(mask_dists.sigmoid() * 0.1 + 1, 1, dim=-1)
+    beta_x_c0, beta_x_c1, beta_y_c0, beta_y_c1 = torch.split(mask_dists.sigmoid() * 0 + 1, 1, dim=-1)
     point_coords_x , point_coords_y = torch.split(point_coords, 1, dim=-1)
     dist_x = torch.distributions.beta.Beta(beta_x_c0, beta_x_c1)
     dist_y = torch.distributions.beta.Beta(beta_y_c0, beta_y_c1)
