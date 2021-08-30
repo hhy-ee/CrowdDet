@@ -118,13 +118,16 @@ def va_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape):
     for level, (fm_level, scale_level) in enumerate(zip(fpn_fms, stride)):
         inds = torch.nonzero(level_assignments == level, as_tuple=False).squeeze(1)
         rois_level = rois[inds]
-        dists_level = dists[inds]
-        gt_roi_ind = torch.where(dists_level[:, 1:].sum(1) == 0)[0]
-        pr_roi_ind = torch.where(dists_level[:, 1:].sum(1) != 0)[0]
-        point_coords = generate_regular_grid_point_coords(len(inds), pool_shape, device)
-        mask = generate_mask_for_dists(point_coords[pr_roi_ind], dists_level[pr_roi_ind, 1:], pool_shape)
-        output[gt_roi_ind] = roi_align(fm_level, rois_level[gt_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
+        output[inds] = roi_align(fm_level, rois_level, pool_shape, spatial_scale=1.0/scale_level,
                 sampling_ratio=-1, aligned=True)
-        output[pr_roi_ind] = roi_align(fm_level, rois_level[pr_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
-                sampling_ratio=-1, aligned=True) * mask
+
+        # dists_level = dists[inds]
+        # gt_roi_ind = torch.where(dists_level[:, 1:].sum(1) == 0)[0]
+        # pr_roi_ind = torch.where(dists_level[:, 1:].sum(1) != 0)[0]
+        # point_coords = generate_regular_grid_point_coords(len(inds), pool_shape, device)
+        # mask = generate_mask_for_dists(point_coords[pr_roi_ind], dists_level[pr_roi_ind, 1:], pool_shape)
+        # output[gt_roi_ind] = roi_align(fm_level, rois_level[gt_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
+        #         sampling_ratio=-1, aligned=True)
+        # output[pr_roi_ind] = roi_align(fm_level, rois_level[pr_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
+        #         sampling_ratio=-1, aligned=True) * mask
     return output
