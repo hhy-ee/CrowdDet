@@ -24,11 +24,11 @@ class RPN(nn.Module):
         for l in [self.rpn_conv, self.rpn_cls_score, self.rpn_bbox_offsets]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
-        if config.beta_dist_param == 1.0:
+        if config.va_beta[1] == 1.0:
             for l in [self.rpn_bbox_dist]:
                 nn.init.normal_(l.weight, std=0.01)
                 nn.init.constant_(l.bias, -4.0)
-        elif config.beta_dist_param == 0.5:
+        elif config.va_beta[1] == 0.5:
             for l in [self.rpn_bbox_dist]:
                 nn.init.normal_(l.weight, std=0.01)
                 nn.init.constant_(l.bias, 0)

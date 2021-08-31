@@ -75,7 +75,7 @@ class RCNN(nn.Module):
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
         va_pool_features = va_mask_roi_pooler(fpn_fms, rcnn_rois, rcnn_dists, 
-                                                stride, (7, 7), config.beta_dist_param)
+                                                stride, (7, 7), config.va_beta)
         flatten_feature = torch.flatten(va_pool_features, start_dim=1)
         flatten_feature = F.relu_(self.fc1(flatten_feature))
         flatten_feature = F.relu_(self.fc2(flatten_feature))

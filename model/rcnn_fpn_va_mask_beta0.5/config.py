@@ -103,7 +103,7 @@ class Config:
     save_data = False
     
     # ----------my config---------- #
-    beta_dist_param = 0.5
+    va_beta = (1.0, 0.5)
 
 config = Config()
 

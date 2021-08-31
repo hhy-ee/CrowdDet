@@ -29,9 +29,9 @@ def get_point_coords_wrt_image(boxes_coords, point_coords):
     return point_coords_wrt_image
 
 
-def generate_mask_for_dists(point_coords, mask_dists, pool_shape, beta_dist_param):
+def generate_mask_for_dists(point_coords, mask_dists, pool_shape, va_beta):
     mask_dists = mask_dists.unsqueeze(1).repeat(1, pool_shape[0]*pool_shape[1], 1)
-    beta_x_c0, beta_x_c1, beta_y_c0, beta_y_c1 = torch.split(mask_dists.sigmoid() + beta_dist_param, 1, dim=-1)
+    beta_x_c0, beta_x_c1, beta_y_c0, beta_y_c1 = torch.split(mask_dists.sigmoid()*va_beta[0] + va_beta[1], 1, dim=-1)
     point_coords_x , point_coords_y = torch.split(point_coords, 1, dim=-1)
     dist_x = torch.distributions.beta.Beta(beta_x_c0, beta_x_c1)
     dist_y = torch.distributions.beta.Beta(beta_y_c0, beta_y_c1)
@@ -106,7 +106,7 @@ def va_samling_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ra
                 1.0/scale_level, va_sample_ratio)
     return output
 
-def va_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, beta_dist_param):
+def va_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_beta):
     assert len(fpn_fms) == len(stride)
     max_level = int(math.log2(stride[-1]))
     min_level = int(math.log2(stride[0]))
@@ -118,14 +118,11 @@ def va_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, beta_dist_param
     for level, (fm_level, scale_level) in enumerate(zip(fpn_fms, stride)):
         inds = torch.nonzero(level_assignments == level, as_tuple=False).squeeze(1)
         rois_level = rois[inds]
-        # output[inds] = roi_align(fm_level, rois_level, pool_shape, spatial_scale=1.0/scale_level,
-        #         sampling_ratio=-1, aligned=True)
-
         dists_level = dists[inds]
         gt_roi_ind = torch.where(dists_level[:, 1:].sum(1) == 0)[0]
         pr_roi_ind = torch.where(dists_level[:, 1:].sum(1) != 0)[0]
         point_coords = generate_regular_grid_point_coords(len(inds), pool_shape, device)
-        mask = generate_mask_for_dists(point_coords[pr_roi_ind], dists_level[pr_roi_ind, 1:], pool_shape, beta_dist_param)
+        mask = generate_mask_for_dists(point_coords[pr_roi_ind], dists_level[pr_roi_ind, 1:], pool_shape, va_beta)
         output[inds[gt_roi_ind]] = roi_align(fm_level, rois_level[gt_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
                 sampling_ratio=-1, aligned=True)
         output[inds[pr_roi_ind]] = roi_align(fm_level, rois_level[pr_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
