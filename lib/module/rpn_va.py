@@ -21,9 +21,17 @@ class RPN(nn.Module):
         self.rpn_bbox_offsets = nn.Conv2d(rpn_channel, config.num_cell_anchors * 4, kernel_size=1, stride=1)
         self.rpn_bbox_dist = nn.Conv2d(rpn_channel, config.num_cell_anchors * 4, kernel_size=1, stride=1)
 
-        for l in [self.rpn_conv, self.rpn_cls_score, self.rpn_bbox_offsets, self.rpn_bbox_dist]:
+        for l in [self.rpn_conv, self.rpn_cls_score, self.rpn_bbox_offsets]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
+        if config.beta_dist_param == 1.0:
+            for l in [self.rpn_bbox_dist]:
+                nn.init.normal_(l.weight, std=0.01)
+                nn.init.constant_(l.bias, -4.0)
+        elif config.beta_dist_param == 0.5:
+            for l in [self.rpn_bbox_dist]:
+                nn.init.normal_(l.weight, std=0.01)
+                nn.init.constant_(l.bias, 0)
 
     def forward(self, features, im_info, boxes=None):
         # prediction
