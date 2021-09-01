@@ -128,3 +128,32 @@ def va_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_beta):
         output[inds[pr_roi_ind]] = roi_align(fm_level, rois_level[pr_roi_ind], pool_shape, spatial_scale=1.0/scale_level,
                 sampling_ratio=-1, aligned=True) * mask
     return output
+
+def va_pos_mask_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_beta):
+    assert len(fpn_fms) == len(stride)
+    max_level = int(math.log2(stride[-1]))
+    min_level = int(math.log2(stride[0]))
+    assert (len(stride) == max_level - min_level + 1)
+    level_assignments = assign_boxes_to_levels(rois, min_level, max_level, 224, 4)
+    dtype, device = fpn_fms[0].dtype, fpn_fms[0].device
+    output = torch.zeros((len(rois), fpn_fms[0].shape[1], pool_shape[0], pool_shape[1]),
+            dtype=dtype, device=device)
+    outmask = torch.zeros((len(rois), 1, pool_shape[0], pool_shape[1]),
+            dtype=dtype, device=device)
+    for level, (fm_level, scale_level) in enumerate(zip(fpn_fms, stride)):
+        inds = torch.nonzero(level_assignments == level, as_tuple=False).squeeze(1)
+        rois_level = rois[inds]
+        dists_level = dists[inds]
+        gt_roi_ind = torch.where(dists_level[:, 1:].sum(1) == 0)[0]
+        pr_roi_ind = torch.where(dists_level[:, 1:].sum(1) != 0)[0]
+        point_coords = generate_regular_grid_point_coords(len(inds), pool_shape, device)
+        
+        output[inds[gt_roi_ind]] = roi_align(fm_level, rois_level[gt_roi_ind], pool_shape, 
+                spatial_scale=1.0/scale_level, sampling_ratio=-1, aligned=True)
+        output[inds[pr_roi_ind]] = roi_align(fm_level, rois_level[pr_roi_ind], pool_shape, 
+                spatial_scale=1.0/scale_level, sampling_ratio=-1, aligned=True)
+        outmask[inds[gt_roi_ind]] = torch.ones((len(gt_roi_ind), 1, pool_shape[0], pool_shape[1]), 
+                dtype=dtype, device=device)
+        outmask[inds[pr_roi_ind]] = generate_mask_for_dists(point_coords[pr_roi_ind], 
+                dists_level[pr_roi_ind, 1:], pool_shape, va_beta)
+    return output, outmask

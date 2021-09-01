@@ -167,13 +167,13 @@ def run_train():
     parser.add_argument('--model_dir', '-md', default=None,required=True,type=str)
     parser.add_argument('--resume_weights', '-r', default=None,type=int)
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '8887'
+    os.environ['MASTER_PORT'] = '8886'
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_baseline_mlanchor_mmdet'])
-    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_va_mask'])
+    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5'])
     
 
     # import libs
