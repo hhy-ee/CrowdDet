@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 import torch
@@ -167,12 +167,12 @@ def run_train():
     parser.add_argument('--model_dir', '-md', default=None,required=True,type=str)
     parser.add_argument('--resume_weights', '-r', default=None,type=int)
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '8886'
+    os.environ['MASTER_PORT'] = '8887'
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
-    # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
     # args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5'])
     
 
