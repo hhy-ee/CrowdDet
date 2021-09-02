@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, kldiv_loss
+from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, rcnn_kldiv_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -101,7 +101,7 @@ class RCNN(nn.Module):
                 pred_delta,
                 bbox_targets[fg_masks],
                 config.rcnn_smooth_l1_beta)
-            kldivergence_loss = kldiv_loss(
+            kldivergence_loss = rcnn_kldiv_loss(
                 pred_mean,
                 pred_lstd,
                 config.kl_weight)

@@ -76,7 +76,7 @@ class Config:
     anchor_within_border = False
 
     rpn_min_box_size = 2
-    rpn_nms_threshold = 0.7
+    rpn_nms_threshold = 0.5
     train_prev_nms_top_n = 12000
     train_post_nms_top_n = 2000
     test_prev_nms_top_n = 6000
@@ -85,7 +85,7 @@ class Config:
     # ----------binding&training config---------- #
     rpn_smooth_l1_beta = 1
     rcnn_smooth_l1_beta = 1
-    kl_weight = 1e-3
+    kl_weight = 1e-1
 
     num_sample_anchors = 256
     positive_anchor_ratio = 0.5
@@ -95,7 +95,7 @@ class Config:
 
     num_rois = 512
     fg_ratio = 0.5
-    fg_threshold = 0.5
+    fg_threshold = 0.6
     bg_threshold_high = 0.5
     bg_threshold_low = 0.0
     rcnn_bbox_normalize_targets = True

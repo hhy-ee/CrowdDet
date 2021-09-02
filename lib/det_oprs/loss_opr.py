@@ -103,7 +103,11 @@ def push_loss(labels, regs, anchors, weight):
 
 def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
-    return kl_weight * loss.mean() 
+    return kl_weight * loss.mean()
+
+def rcnn_kldiv_loss(pred_mean, pred_lstd, kl_weight):
+    loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
+    return kl_weight * loss.mean(axis=1)
 
 def iouvar_loss(anchors, bbox_target, reg_samples, iouvar_weight):
     target_bbox = bbox_transform_inv_opr(anchors, bbox_target)
