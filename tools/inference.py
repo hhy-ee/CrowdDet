@@ -6,7 +6,11 @@ import cv2
 import torch
 import numpy as np
 
-sys.path.insert(0, '../lib')
+lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
+model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
+sys.path.insert(0, lib_dir)
+sys.path.insert(0, model_dir)
+
 from utils import misc_utils, visual_utils, nms_utils
 
 def inference(args, config, network):
@@ -105,7 +109,11 @@ def run_inference():
     parser.add_argument('--model_dir', '-md', default=None, required=True, type=str)
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
-    args = parser.parse_args()
+    # args = parser.parse_args()
+    args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5',
+                                '--resume_weights', '30',
+                                '--img_path', './model/img/'])
+    
     # import libs
     model_root_dir = os.path.join('../model/', args.model_dir)
     sys.path.insert(0, model_root_dir)
