@@ -1,4 +1,5 @@
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 
@@ -16,7 +17,7 @@ from utils import misc_utils, visual_utils, nms_utils
 def inference(args, config, network):
     # model_path
     misc_utils.ensure_dir('outputs')
-    saveDir = os.path.join('../model', args.model_dir, config.model_dir)
+    saveDir = os.path.join(model_dir, args.model_dir, config.model_dir)
     model_file = os.path.join(saveDir,
             'dump-{}.pth'.format(args.resume_weights))
     assert os.path.exists(model_file)
@@ -39,6 +40,14 @@ def inference(args, config, network):
             scores=pred_boxes[:, 4],
             tags=pred_tags_name,
             line_thick=1, line_color='white')
+    # if config.save_data:
+    #     image = visual_utils.draw_dists(
+    #         image,
+    #         pred_boxes[:, :4],
+    #         pred_boxes[:, 6:],
+    #         config.va_beta,
+    #         scores=pred_boxes[:, 4])
+
     name = args.img_path.split('/')[-1].split('.')[-2]
     fpath = 'outputs/{}.png'.format(name)
     cv2.imwrite(fpath, image)
@@ -57,8 +66,11 @@ def post_process(pred_boxes, config, scale):
         keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
         pred_boxes = pred_boxes[keep]
     elif config.test_nms_method == 'normal_nms':
-        assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
-        pred_boxes = pred_boxes.reshape(-1, 6)
+        if config.save_data:
+                pred_boxes = pred_boxes.reshape(-1, 10)
+        else:
+            assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
+            pred_boxes = pred_boxes.reshape(-1, 6)
         keep = pred_boxes[:, 4] > config.pred_cls_threshold
         pred_boxes = pred_boxes[keep]
         keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
@@ -110,12 +122,12 @@ def run_inference():
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5',
+    args = parser.parse_args(['--model_dir', 'rcnn_fpn_va_mask_beta1.0_initf',
                                 '--resume_weights', '30',
-                                '--img_path', './model/img/'])
+                                '--img_path', './data/CrowdHuman/Images/273275,c5d22000e47802ff.jpg'])
     
     # import libs
-    model_root_dir = os.path.join('../model/', args.model_dir)
+    model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network

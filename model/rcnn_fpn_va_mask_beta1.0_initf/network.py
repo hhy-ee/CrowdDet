@@ -7,7 +7,7 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from module.rpn_va import RPN
-from layers.va_pooler import va_mask_roi_pooler
+from layers.va_pooler import va_pos_mask_roi_pooler
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target_va
@@ -74,8 +74,9 @@ class RCNN(nn.Module):
         # input p2-p5
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
-        va_pool_features = va_mask_roi_pooler(fpn_fms, rcnn_rois, rcnn_dists, 
+        va_pool_features, va_pool_masks = va_pos_mask_roi_pooler(fpn_fms, rcnn_rois, rcnn_dists, 
                                                 stride, (7, 7), config.va_beta)
+        va_pool_features = va_pool_features * va_pool_masks
         flatten_feature = torch.flatten(va_pool_features, start_dim=1)
         flatten_feature = F.relu_(self.fc1(flatten_feature))
         flatten_feature = F.relu_(self.fc2(flatten_feature))
@@ -113,7 +114,10 @@ class RCNN(nn.Module):
             pred_delta = pred_delta[:, 4:].reshape(-1, 4)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
-            pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
+            if config.save_data:
+                pred_bbox = torch.cat([pred_bbox, pred_scores, tag, rcnn_dists[:, 1:]], axis=1)
+            else:
+                pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
             return pred_bbox
 
 def restore_bbox(rois, deltas, unnormalize=True):
