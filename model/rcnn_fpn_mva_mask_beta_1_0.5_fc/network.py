@@ -63,10 +63,11 @@ class RCNN(nn.Module):
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
         self.pred_delta = nn.Linear(1024, config.num_classes * 4)
+        self.pred_overlap_delta = nn.Linear(1024, 4)
         for l in [self.pred_cls]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
-        for l in [self.pred_delta]:
+        for l in [self.pred_delta, self.pred_overlap_delta]:
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
 
@@ -100,13 +101,12 @@ class RCNN(nn.Module):
                 flatten_overlap_feature = torch.flatten(mask_pool_features, start_dim=1)
                 flatten_overlap_feature = F.relu_(self.fc1(flatten_overlap_feature))
                 flatten_overlap_feature = F.relu_(self.fc2(flatten_overlap_feature))
-                pred_overlap_delta = self.pred_delta(flatten_overlap_feature)
-                pred_overlap_delta = pred_overlap_delta.reshape(-1, config.num_classes, 4)[:, 1, :]
+                pred_overlap_delta = self.pred_overlap_delta(flatten_overlap_feature)
                 overlap_localization_loss = smooth_l1_loss(
                                                 pred_overlap_delta,
                                                 overlap_bbox_targets,
                                                 config.rcnn_smooth_l1_beta)
-            
+
             # loss for regression 
             pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
             fg_gt_classes = labels[fg_masks]
