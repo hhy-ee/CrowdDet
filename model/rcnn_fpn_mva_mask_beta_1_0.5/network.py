@@ -121,11 +121,11 @@ class RCNN(nn.Module):
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer
             loss_rcnn_cls = objectness_loss.sum() * normalizer
-            loss_rcnn_ol_loc = overlap_localization_loss.sum() / fg_masks.sum().item()
             loss_dict = {}
             loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
             loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
             if trained_idx.shape[0] != 0:
+                loss_rcnn_ol_loc = overlap_localization_loss.sum() / fg_masks.sum().item()
                 loss_dict['loss_rcnn_ol_loc'] = loss_rcnn_ol_loc
             return loss_dict
         else:
