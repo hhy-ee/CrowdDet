@@ -173,7 +173,7 @@ def run_train():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
-    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5'])
+    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_baseline_noaddgt'])
     
 
     # import libs

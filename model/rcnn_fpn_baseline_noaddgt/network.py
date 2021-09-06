@@ -6,11 +6,10 @@ import numpy as np
 from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
-from module.rpn_mva import RPN
+from module.rpn import RPN
 from layers.pooler import roi_pooler
-from layers.va_pooler import generate_regular_grid_point_coords, generate_mask_for_dists
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.fpn_roi_target import fpn_roi_target_mva
+from det_oprs.fpn_roi_target import fpn_roi_target_noaddgt
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
 from det_oprs.utils import get_padded_tensor
 
@@ -35,19 +34,19 @@ class Network(nn.Module):
         loss_dict = {}
         fpn_fms = self.FPN(image)
         # fpn_fms stride: 64,32,16,8,4, p6->p2
-        rpn_rois, rpn_dists, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
-        rcnn_rois, rcnn_dists, rcnn_labels, rcnn_bbox_targets, rcnn_overlap_iou, \
-            rcnn_overlap_bbox_targets = fpn_roi_target_mva(rpn_rois, rpn_dists, im_info, gt_boxes)    
-        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois, rcnn_dists, rcnn_labels, 
-            rcnn_bbox_targets, rcnn_overlap_iou, rcnn_overlap_bbox_targets)
+        rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
+        rcnn_rois, rcnn_labels, rcnn_bbox_targets = fpn_roi_target_noaddgt(
+                rpn_rois, im_info, gt_boxes, top_k=1)
+        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois,
+                rcnn_labels, rcnn_bbox_targets)
         loss_dict.update(loss_dict_rpn)
         loss_dict.update(loss_dict_rcnn)
         return loss_dict
 
     def _forward_test(self, image, im_info):
         fpn_fms = self.FPN(image)
-        rpn_rois, rpn_dists = self.RPN(fpn_fms, im_info)
-        pred_bbox = self.RCNN(fpn_fms, rpn_rois, rpn_dists)
+        rpn_rois = self.RPN(fpn_fms, im_info)
+        pred_bbox = self.RCNN(fpn_fms, rpn_rois)
         return pred_bbox.cpu().detach()
 
 class RCNN(nn.Module):
@@ -63,16 +62,14 @@ class RCNN(nn.Module):
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
         self.pred_delta = nn.Linear(1024, config.num_classes * 4)
-        self.pred_overlap_delta = nn.Linear(1024, 4)
         for l in [self.pred_cls]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
-        for l in [self.pred_delta, self.pred_overlap_delta]:
+        for l in [self.pred_delta]:
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
 
-    def forward(self, fpn_fms, rcnn_rois, rcnn_dists, labels=None, 
-                        bbox_targets=None, overlap_iou=None, overlap_bbox_targets=None):
+    def forward(self, fpn_fms, rcnn_rois, labels=None, bbox_targets=None):
         # input p2-p5
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
@@ -82,32 +79,12 @@ class RCNN(nn.Module):
         flatten_feature = F.relu_(self.fc2(flatten_feature))
         pred_cls = self.pred_cls(flatten_feature)
         pred_delta = self.pred_delta(flatten_feature)
-
         if self.training:
-            # fg labels
+            # loss for regression
             labels = labels.long().flatten()
             fg_masks = labels > 0
             valid_masks = labels >= 0
-            # loss for overlap regression
-            overlap_idx = torch.where(overlap_iou[fg_masks] > config.overlap_iou_threshold)[0]
-            trained_idx = torch.where(rcnn_dists[fg_masks, 1:][overlap_idx].sum(1) != 0)[0]
-            if trained_idx.shape[0] != 0:
-                point_coords = generate_regular_grid_point_coords(len(trained_idx), (7, 7), labels.device)
-                overlap_pool_features = pool_features[fg_masks, :][overlap_idx, :][trained_idx, :]
-                overlap_dists = rcnn_dists[fg_masks, :][overlap_idx, :][trained_idx, :]
-                overlap_bbox_targets = overlap_bbox_targets[fg_masks, :][overlap_idx, :][trained_idx, :]
-                mask = generate_mask_for_dists(point_coords, overlap_dists[:, 1:], (7, 7), config.va_beta)
-                mask_pool_features = overlap_pool_features * mask
-                flatten_overlap_feature = torch.flatten(mask_pool_features, start_dim=1)
-                flatten_overlap_feature = F.relu_(self.fc1(flatten_overlap_feature))
-                flatten_overlap_feature = F.relu_(self.fc2(flatten_overlap_feature))
-                pred_overlap_delta = self.pred_overlap_delta(flatten_overlap_feature)
-                overlap_localization_loss = smooth_l1_loss(
-                                                pred_overlap_delta,
-                                                overlap_bbox_targets,
-                                                config.rcnn_smooth_l1_beta)
-
-            # loss for regression 
+            # multi class
             pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
             fg_gt_classes = labels[fg_masks]
             pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
@@ -121,12 +98,9 @@ class RCNN(nn.Module):
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer
             loss_rcnn_cls = objectness_loss.sum() * normalizer
-            loss_rcnn_ol_loc = overlap_localization_loss.sum() / fg_masks.sum().item()
             loss_dict = {}
             loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
             loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
-            if trained_idx.shape[0] != 0:
-                loss_dict['loss_rcnn_ol_loc'] = loss_rcnn_ol_loc
             return loss_dict
         else:
             class_num = pred_cls.shape[-1] - 1
