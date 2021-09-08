@@ -139,6 +139,10 @@ class RCNN(nn.Module):
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
             pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
+            if config.plot_data:
+                pred_bbox = torch.cat([pred_bbox, pred_scores, tag, rcnn_dists[:, 1:]], axis=1)
+            else:
+                pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
             return pred_bbox
 
 def restore_bbox(rois, deltas, unnormalize=True):

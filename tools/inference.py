@@ -40,13 +40,13 @@ def inference(args, config, network):
             scores=pred_boxes[:, 4],
             tags=pred_tags_name,
             line_thick=1, line_color='white')
-    # if config.save_data:
-    #     image = visual_utils.draw_dists(
-    #         image,
-    #         pred_boxes[:, :4],
-    #         pred_boxes[:, 6:],
-    #         config.va_beta,
-    #         scores=pred_boxes[:, 4])
+    if config.plot_data:
+        image = visual_utils.draw_dists(
+            image,
+            pred_boxes[:, :4],
+            pred_boxes[:, 6:],
+            config.va_beta,
+            scores=pred_boxes[:, 4])
 
     name = args.img_path.split('/')[-1].split('.')[-2]
     fpath = 'outputs/{}.png'.format(name)
@@ -66,7 +66,7 @@ def post_process(pred_boxes, config, scale):
         keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
         pred_boxes = pred_boxes[keep]
     elif config.test_nms_method == 'normal_nms':
-        if config.save_data:
+        if config.plot_data:
                 pred_boxes = pred_boxes.reshape(-1, 10)
         else:
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
@@ -87,8 +87,8 @@ def post_process(pred_boxes, config, scale):
     #    pred_boxes = pred_boxes[order]
     # recovery the scale
     pred_boxes[:, :4] /= scale
-    keep = pred_boxes[:, 4] > config.visulize_threshold
-    pred_boxes = pred_boxes[keep]
+    vis_keep = pred_boxes[:, 4] > config.visulize_threshold
+    pred_boxes = pred_boxes[vis_keep]
     return pred_boxes
 
 def get_data(img_path, short_size, max_size):
@@ -122,7 +122,7 @@ def run_inference():
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'rcnn_fpn_va_mask_beta1.0_initf',
+    args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5_fc',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/273275,c5d22000e47802ff.jpg'])
     
