@@ -125,15 +125,12 @@ def fpn_roi_target_mvpd(rpn_rois, im_info, gt_boxes, top_k=1, eps=1e-10):
         bbox_targets = bbox_targets.reshape(-1, top_k * 4)
 
         # overlap box select
-        # true_gt_idx = torch.where(gt_boxes_perimg[:, -1] == 1)[0]
-        # overlaps_normal, overlaps_ignore = box_overlap_ignore_opr(
-        #         all_rois[:, 1:5], gt_boxes_perimg[true_gt_idx, :])
-        # overlaps_normal_indices = overlaps_normal.sort(descending=True, dim=1)
         overlap_gt_assignment_normal = overlaps_normal_indices[:, 1].flatten()
         overlap_gt_idx = overlap_gt_assignment_normal[keep_mask]
         target_overlap_boxes = gt_boxes_perimg[overlap_gt_idx, :4]
         overlap_bbox_targets = bbox_transform_opr(target_rois[:, 1:5], target_overlap_boxes)
-        targer_stds = (torch.abs(overlap_bbox_targets - bbox_targets) + eps) / config.std_param
+        targer_stds = torch.abs(overlap_bbox_targets - bbox_targets) / config.std_param
+        targer_stds = targer_stds.clamp(min=eps, max=1)
 
         return_rois.append(rois)
         return_labels.append(labels)

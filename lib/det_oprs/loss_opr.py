@@ -109,8 +109,13 @@ def rcnn_kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean(axis=1)
 
-def rcnn_mvpd_kldiv_loss(lstd, std_targets, kl_weight):
-    loss = (1 + 2 * std_targets.log() - 2 * lstd - (std_targets**2).div(lstd.mul(2).exp())).mul(-0.5)
+def rcnn_m1vpd_kldiv_loss(lstd, std_targets, kl_weight):
+    loss = (1 + 2 * std_targets.log() - 2 * lstd - (std_targets.pow(2)).div(lstd.mul(2).exp())).mul(-0.5)
+    return kl_weight * loss.sum(axis=1)
+
+def rcnn_m2vpd_kldiv_loss(mean, lstd, mean_targets, std_targets, kl_weight):
+    loss = (1 + 2 * std_targets.log() - 2 * lstd - (std_targets.pow(2) + 
+                    (mean - mean_targets).pow(2)).div(lstd.mul(2).exp())).mul(-0.5)
     return kl_weight * loss.sum(axis=1)
 
 def iouvar_loss(anchors, bbox_target, reg_samples, iouvar_weight):

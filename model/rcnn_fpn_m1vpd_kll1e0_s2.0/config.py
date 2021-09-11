@@ -105,6 +105,6 @@ class Config:
     # mvpd config
     save_data = False
     std_param = 2.0
-    
+    std_threshold = 1.0 
 config = Config()
 
