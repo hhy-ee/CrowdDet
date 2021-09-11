@@ -70,7 +70,7 @@ def fpn_roi_target(rpn_rois, im_info, gt_boxes, top_k=1):
         return return_rois, return_labels, return_bbox_targets
 
 @torch.no_grad()
-def fpn_roi_target_mvpd(rpn_rois, im_info, gt_boxes, top_k=1, eps=1e-10):
+def fpn_roi_target_m1vpd(rpn_rois, im_info, gt_boxes, top_k=1, eps=1e-10):
     return_rois = []
     return_labels = []
     return_std_targets = []
