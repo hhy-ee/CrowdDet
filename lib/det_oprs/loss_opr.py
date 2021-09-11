@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.bbox_opr import box_overlap_opr, align_giou_opr
+from det_oprs.bbox_opr import box_overlap_opr, align_box_giou_opr
 from config import config
 
 def softmax_loss(score, label, ignore_label=-1):
@@ -109,9 +109,13 @@ def rcnn_kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean(axis=1)
 
+def rcnn_mvpd_kldiv_loss(lstd, std_targets, kl_weight):
+    loss = (1 + 2 * std_targets.log() - 2 * lstd - (std_targets**2).div(lstd.mul(2).exp())).mul(-0.5)
+    return kl_weight * loss.sum(axis=1)
+
 def iouvar_loss(anchors, bbox_target, reg_samples, iouvar_weight):
     target_bbox = bbox_transform_inv_opr(anchors, bbox_target)
-    samples_iou = align_giou_opr(reg_samples.reshape(-1, 4), target_bbox.repeat(config.sample_num,1))
+    samples_iou = align_box_giou_opr(reg_samples.reshape(-1, 4), target_bbox.repeat(config.sample_num,1))
     var_loss = torch.var(samples_iou.reshape(config.sample_num , -1), dim=0)
     return iouvar_weight * var_loss 
 

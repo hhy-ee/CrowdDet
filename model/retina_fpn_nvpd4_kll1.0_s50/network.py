@@ -12,7 +12,7 @@ from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr 
 from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss, iouvar_loss
 from det_oprs.utils import get_padded_tensor
-from det_oprs.bbox_opr import align_giou_opr, bbox_transform_inv_opr
+from det_oprs.bbox_opr import align_box_giou_opr, bbox_transform_inv_opr
 
 class Network(nn.Module):
     def __init__(self):
