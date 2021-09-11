@@ -3,7 +3,7 @@ import torch
 
 import numpy as np
 from config import config
-from det_oprs.bbox_opr import box_overlap_opr, bbox_transform_opr, box_overlap_ignore_opr, box_giou_opr
+from det_oprs.bbox_opr import box_overlap_opr, bbox_transform_opr, box_overlap_ignore_opr
 
 @torch.no_grad()
 def fpn_roi_target(rpn_rois, im_info, gt_boxes, top_k=1):
@@ -70,11 +70,11 @@ def fpn_roi_target(rpn_rois, im_info, gt_boxes, top_k=1):
         return return_rois, return_labels, return_bbox_targets
 
 @torch.no_grad()
-def fpn_roi_target_m1vpd(rpn_rois, im_info, gt_boxes, top_k=1, eps=1e-10):
+def fpn_roi_target_mvpd(rpn_rois, im_info, gt_boxes, top_k=1, eps=1e-10):
     return_rois = []
     return_labels = []
-    return_std_targets = []
     return_bbox_targets = []
+    return_std_targets = []
     # get per image proposals and gt_boxes
     for bid in range(config.train_batch_per_gpu):
         gt_boxes_perimg = gt_boxes[bid, :int(im_info[bid, 5]), :]
@@ -130,20 +130,20 @@ def fpn_roi_target_m1vpd(rpn_rois, im_info, gt_boxes, top_k=1, eps=1e-10):
         target_overlap_boxes = gt_boxes_perimg[overlap_gt_idx, :4]
         overlap_bbox_targets = bbox_transform_opr(target_rois[:, 1:5], target_overlap_boxes)
         targer_stds = torch.abs(overlap_bbox_targets - bbox_targets) / config.std_param
-        targer_stds = targer_stds.clamp(min=eps, max=1)
+        targer_stds = targer_stds.clamp(min=eps, max=config.std_threshold)
 
         return_rois.append(rois)
         return_labels.append(labels)
-        return_std_targets.append(targer_stds)
         return_bbox_targets.append(bbox_targets)
+        return_std_targets.append(targer_stds)
     if config.train_batch_per_gpu == 1:
-        return rois, labels, targer_stds, bbox_targets
+        return rois, labels, bbox_targets, targer_stds
     else:
         return_rois = torch.cat(return_rois, axis=0)
         return_labels = torch.cat(return_labels, axis=0)
-        return_std_targets = torch.cat(return_std_targets, axis=0)
         return_bbox_targets = torch.cat(return_bbox_targets, axis=0)
-        return return_rois, return_labels, return_std_targets, return_bbox_targets
+        return_std_targets = torch.cat(return_std_targets, axis=0)
+        return return_rois, return_labels, return_bbox_targets, return_std_targets
 
 @torch.no_grad()
 def fpn_roi_target_noaddgt(rpn_rois, im_info, gt_boxes, top_k=1):

@@ -85,7 +85,6 @@ class Config:
     # ----------binding&training config---------- #
     rpn_smooth_l1_beta = 1
     rcnn_smooth_l1_beta = 1
-    kl_weight = 1.0
 
     num_sample_anchors = 256
     positive_anchor_ratio = 0.5
@@ -104,8 +103,9 @@ class Config:
 
     # mvpd config
     save_data = False
+    kl_weight = 1e-1
     std_param = 1.0
-    std_threshold = 1.0 
+    std_threshold = 1.0
     
 config = Config()
 

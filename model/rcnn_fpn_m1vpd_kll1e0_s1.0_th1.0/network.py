@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target_m1vpd
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, rcnn_m1vpd_kldiv_loss
+from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, rcnn_mvpd_kldiv_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -35,10 +35,10 @@ class Network(nn.Module):
         fpn_fms = self.FPN(image)
         # fpn_fms stride: 64,32,16,8,4, p6->p2
         rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
-        rcnn_rois, rcnn_labels, rcnn_std_targets, rcnn_bbox_targets = fpn_roi_target_m1vpd(
+        rcnn_rois, rcnn_labels, rcnn_bbox_targets, rcnn_std_targets = fpn_roi_target_m1vpd(
                 rpn_rois, im_info, gt_boxes, top_k=1)
-        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois,
-                rcnn_labels, rcnn_std_targets, rcnn_bbox_targets)
+        loss_dict_rcnn = self.RCNN(
+                fpn_fms, rcnn_rois, rcnn_labels, rcnn_bbox_targets, rcnn_std_targets)
         loss_dict.update(loss_dict_rpn)
         loss_dict.update(loss_dict_rcnn)
         return loss_dict
@@ -69,7 +69,7 @@ class RCNN(nn.Module):
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
 
-    def forward(self, fpn_fms, rcnn_rois, labels=None, std_targets=None, bbox_targets=None):
+    def forward(self, fpn_fms, rcnn_rois, labels=None, bbox_targets=None, std_targets=None):
         # input p2-p5
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
@@ -100,10 +100,13 @@ class RCNN(nn.Module):
                 pred_delta,
                 bbox_targets[fg_masks],
                 config.rcnn_smooth_l1_beta)
-            kldivergence_loss = rcnn_m1vpd_kldiv_loss(
+            kldivergence_loss = rcnn_mvpd_kldiv_loss(
+                pred_mean,
                 pred_lstd,
+                bbox_targets[fg_masks],
                 std_targets[fg_masks],
                 config.kl_weight)
+
             # loss for classification
             objectness_loss = softmax_loss(pred_cls, labels)
             objectness_loss = objectness_loss * valid_masks
