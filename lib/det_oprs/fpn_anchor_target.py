@@ -171,6 +171,44 @@ def fpn_anchor_target_opr_core_impl(
         bbox_targets = bbox_targets / std_opr - minus_opr
     return labels, bbox_targets
 
+def fpn_m_anchor_target_opr_core_impl(
+        gt_boxes, im_info, anchors, allow_low_quality_matches=True):
+    ignore_label = config.ignore_label
+    # get the gt boxes
+    valid_gt_boxes = gt_boxes[:int(im_info[5]), :]
+    valid_gt_boxes = valid_gt_boxes[valid_gt_boxes[:, -1].gt(0)]
+    # compute the iou matrix
+    anchors = anchors.type_as(valid_gt_boxes)
+    overlaps = box_overlap_opr(anchors, valid_gt_boxes[:, :4])
+    # match the dtboxes
+    max_overlaps, argmax_overlaps = torch.max(overlaps, axis=1)
+    #_, gt_argmax_overlaps = torch.max(overlaps, axis=0)
+    gt_argmax_overlaps = my_gt_argmax(overlaps)
+    del overlaps
+    # all ignore
+    labels = torch.ones(anchors.shape[0], device=gt_boxes.device, dtype=torch.long) * ignore_label
+    # set negative ones
+    labels = labels * (max_overlaps >= config.rpn_negative_overlap)
+    # set positive ones
+    fg_mask = (max_overlaps >= config.rpn_positive_overlap)
+    if allow_low_quality_matches:
+        gt_id = torch.arange(valid_gt_boxes.shape[0]).type_as(argmax_overlaps)
+        argmax_overlaps[gt_argmax_overlaps] = gt_id
+        max_overlaps[gt_argmax_overlaps] = 1
+        fg_mask = (max_overlaps >= config.rpn_positive_overlap)
+    # set positive ones
+    fg_mask_ind = torch.nonzero(fg_mask, as_tuple=False).flatten()
+    labels[fg_mask_ind] = 1
+    # bbox targets
+    bbox_targets = bbox_transform_opr(
+            anchors, valid_gt_boxes[argmax_overlaps, :4])
+    if config.rpn_bbox_normalize_targets:
+        std_opr = torch.tensor(config.bbox_normalize_stds[None, :]).type_as(bbox_targets)
+        mean_opr = torch.tensor(config.bbox_normalize_means[None, :]).type_as(bbox_targets)
+        minus_opr = mean_opr / std_opr
+        bbox_targets = bbox_targets / std_opr - minus_opr
+    return labels, bbox_targets
+
 @torch.no_grad()
 def fpn_anchor_target(boxes, im_info, all_anchors_list):
     final_labels_list = []
@@ -181,6 +219,35 @@ def fpn_anchor_target(boxes, im_info, all_anchors_list):
         for i in range(len(all_anchors_list)):
             anchors_perlvl = all_anchors_list[i]
             rpn_labels_perlvl, rpn_bbox_targets_perlvl = fpn_anchor_target_opr_core_impl(
+                boxes[bid], im_info[bid], anchors_perlvl)
+            batch_labels_list.append(rpn_labels_perlvl)
+            batch_bbox_targets_list.append(rpn_bbox_targets_perlvl)
+        # here we samples the rpn_labels
+        concated_batch_labels = torch.cat(batch_labels_list, dim=0)
+        concated_batch_bbox_targets = torch.cat(batch_bbox_targets_list, dim=0)
+        # sample labels
+        pos_idx, neg_idx = subsample_labels(concated_batch_labels,
+            config.num_sample_anchors, config.positive_anchor_ratio)
+        concated_batch_labels.fill_(-1)
+        concated_batch_labels[pos_idx] = 1
+        concated_batch_labels[neg_idx] = 0
+
+        final_labels_list.append(concated_batch_labels)
+        final_bbox_targets_list.append(concated_batch_bbox_targets)
+    final_labels = torch.cat(final_labels_list, dim=0)
+    final_bbox_targets = torch.cat(final_bbox_targets_list, dim=0)
+    return final_labels, final_bbox_targets
+
+@torch.no_grad()
+def fpn_m_anchor_target(boxes, im_info, all_anchors_list):
+    final_labels_list = []
+    final_bbox_targets_list = []
+    for bid in range(config.train_batch_per_gpu):
+        batch_labels_list = []
+        batch_bbox_targets_list = []
+        for i in range(len(all_anchors_list)):
+            anchors_perlvl = all_anchors_list[i]
+            rpn_labels_perlvl, rpn_bbox_targets_perlvl = fpn_m_anchor_target_opr_core_impl(
                 boxes[bid], im_info[bid], anchors_perlvl)
             batch_labels_list.append(rpn_labels_perlvl)
             batch_bbox_targets_list.append(rpn_bbox_targets_perlvl)
