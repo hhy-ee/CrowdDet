@@ -38,8 +38,8 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
                 # object_cls_box_prob: P{a_{j} -> b_{i}}, shape: [i, c, j]
                 num_obj = gt_labels_.size(0)
                 indices = torch.stack([torch.arange(num_obj).type_as(gt_labels_), gt_labels_],dim=0)
-                object_cls_box_prob = torch.sparse_coo_tensor(indices, object_box_prob)
-
+                object_cls_box_prob = torch.sparse.FloatTensor(indices, object_box_prob)
+                                        
                 # image_box_iou: P{a_{j} \in A_{+}}, shape: [c, j]
                 box_cls_prob = torch.sparse.sum(object_cls_box_prob, dim=0).to_dense()
                 indices = torch.nonzero(box_cls_prob, as_tuple=False).t_()
@@ -50,7 +50,7 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
                                         object_box_prob[:, indices[1]],
                                         torch.tensor([0]).type_as(object_box_prob)).max(dim=0).values
                     # upmap to shape [j, c]
-                    image_box_prob = torch.sparse_coo_tensor(
+                    image_box_prob = torch.sparse.FloatTensor(
                                         indices.flip([0]),
                                         nonzero_box_prob,
                                         size=(anchors.size(0), config.num_classes-1)).to_dense()
