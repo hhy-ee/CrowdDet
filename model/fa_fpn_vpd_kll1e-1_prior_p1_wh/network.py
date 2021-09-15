@@ -73,17 +73,22 @@ class RetinaNet_Criteria(nn.Module):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
-        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
+        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 6)
         # variational inference
         all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
+        all_pred_meanxy = all_pred_mean[:, :config.num_cell_anchors * 2]
+        all_pred_meanwh = all_pred_mean[:, config.num_cell_anchors * 2:]
         all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        scale = torch.tensor(config.prior_std).type_as(all_pred_lstd)
+        pred_scale_std = all_pred_lstd.exp().mul(scale)
+        all_pred_reg = torch.cat([all_pred_meanxy, all_pred_meanwh + pred_scale_std * 
+                                torch.randn_like(all_pred_meanwh)], dim=1)
 
         # get ground truth
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
 
         loss_kld = kldiv_loss(
-                all_pred_mean,
+                all_pred_meanwh,
                 all_pred_lstd,
                 config.kl_weight)
         loss_dict['retina_kldiv_loss'] = loss_kld
@@ -112,7 +117,7 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * (config.num_classes-1),
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
-            in_channels, config.num_cell_anchors * 8,
+            in_channels, config.num_cell_anchors * 6,
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
@@ -138,7 +143,7 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 6)
             for _ in pred_reg]
         return pred_cls_list, pred_reg_list
 

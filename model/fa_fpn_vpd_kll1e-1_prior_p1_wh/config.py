@@ -72,7 +72,7 @@ class Config:
     # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
     # anchor_aspect_ratios = [1, 2, 3]
     anchor_base_scale = [2**0]
-    anchor_aspect_ratios = [1]
+    anchor_aspect_ratios = [2]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
@@ -87,4 +87,6 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
+    kl_weight = 1e-1
+    prior_std = [0.35, 0.35]
 config = Config()
