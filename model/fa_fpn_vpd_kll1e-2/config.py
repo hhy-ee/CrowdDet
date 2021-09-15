@@ -51,7 +51,7 @@ class Config:
     focal_loss_gamma = 2
 
     warm_iter = 800
-    max_epoch = 30
+    max_epoch = 40
     lr_decay = [33, 43]
     nr_images_epoch = 15000
     log_dump_interval = 20

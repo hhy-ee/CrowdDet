@@ -211,7 +211,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5',
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1',
     #                           '--resume_weights', '30'])
 
     # import libs
