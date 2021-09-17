@@ -59,7 +59,7 @@ def do_train_epoch(net, data_iter, optimizer, rank, epoch, train_config):
         # get training data
         optimizer.zero_grad()
         # forwad
-        outputs = net(images.cuda(rank), im_info.cuda(rank), gt_boxes.cuda(rank))
+        outputs = net(images.cuda(rank), im_info.cuda(rank), epoch, gt_boxes.cuda(rank))
         # collect the loss
         total_loss = sum([outputs[key].mean() for key in outputs.keys()])
         assert torch.isfinite(total_loss).all(), outputs
@@ -173,7 +173,7 @@ def run_train():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh'])
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_akll1e-1'])
     
 
     # import libs
