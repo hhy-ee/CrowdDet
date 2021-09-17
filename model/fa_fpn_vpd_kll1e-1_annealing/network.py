@@ -23,7 +23,7 @@ class Network(nn.Module):
         self.R_Anchor = RetinaNet_Anchor()
         self.R_Criteria = RetinaNet_Criteria()
 
-    def forward(self, image, im_info, epoch, gt_boxes=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None):
         # pre-processing the data
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
@@ -69,7 +69,7 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = 100 # initialize with any reasonable #fg that's not too small
         self.loss_normalizer_momentum = 0.9
 
-    def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info, epoch):
+    def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info, epoch=None):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
