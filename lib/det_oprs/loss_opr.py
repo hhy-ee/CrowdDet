@@ -105,6 +105,10 @@ def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean()
 
+def kldiv_nvpd_loss(pred_mean, pred_lstd, kl_weight):
+    loss = (1 + pred_lstd.mul(2) - pred_lstd.mul(2).exp()).mul(-0.5)
+    return kl_weight * loss.mean()
+    
 def rcnn_kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean(axis=1)
