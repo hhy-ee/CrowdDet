@@ -87,7 +87,7 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
-    kl_weight = 1e-2
+    kl_weight = 1e-1
     prior_std = [0.35, 0.35]
     multi_sampling_mode = 'max'
     approx_anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
