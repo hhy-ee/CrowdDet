@@ -158,6 +158,8 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     tag = torch.arange(class_num).type_as(keep_cls)+1
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
     pred_scores = keep_cls.reshape(-1, 1)
+    if config.add_test_noise:
+        keep_reg = keep_reg + 0.05 * torch.randn_like(keep_reg)
     pred_bbox = restore_bbox(keep_anchors, keep_reg, False)
     pred_bbox = pred_bbox.repeat(1, class_num).reshape(-1, 4)
     pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)

@@ -81,6 +81,7 @@ class Config:
     positive_thresh = 0.5
     allow_low_quality = True
     save_data = False
+    add_test_noise = False
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6
@@ -89,4 +90,5 @@ class Config:
     loss_box_gamma = 2.0
     kl_weight = 1e-1
     prior_std = [0.35, 0.35]
+    
 config = Config()
