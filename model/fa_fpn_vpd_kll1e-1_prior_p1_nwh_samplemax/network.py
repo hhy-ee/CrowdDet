@@ -76,18 +76,14 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 6)
         # variational inference
         all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
-        all_pred_meanxy = all_pred_mean[:, :config.num_cell_anchors * 2]
         all_pred_meanwh = all_pred_mean[:, config.num_cell_anchors * 2:]
         all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
-        scale = torch.tensor(config.prior_std).type_as(all_pred_lstd)
-        pred_scale_std = all_pred_lstd.exp().mul(scale).repeat(config.sample_num, 1)
-        all_pred_samplewh = all_pred_meanwh.repeat(config.sample_num, 1) + \
-                            pred_scale_std * torch.randn_like(pred_scale_std)
-        all_pred_reg = torch.cat([all_pred_meanxy.repeat(config.sample_num,1), all_pred_samplewh], dim=1)
-        all_pred_reg = all_pred_reg.reshape(config.sample_num,-1,4).permute(1,0,2).reshape(-1,4)
+        all_pred_std = all_pred_lstd.exp().mul(torch.tensor(config.prior_std).type_as(all_pred_lstd))
+        all_pred_reg = all_pred_mean
 
         # get ground truth
-        loss_dict = freeanchor_svpd_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
+        loss_dict = freeanchor_svpd_loss(all_anchors, all_pred_cls, all_pred_reg, 
+                                        all_pred_std, gt_boxes, im_info)
 
         loss_kld = kldiv_nvpd_loss(
                 all_pred_meanwh,

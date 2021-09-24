@@ -91,10 +91,11 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     }
     return losses
 
-def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
+def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, pred_stds, gt_boxes, im_info):
     gt_labels, gt_bboxes = [], []
     cls_prob = cls_prob.reshape(config.train_batch_per_gpu, -1, config.num_classes-1)
     bbox_preds = bbox_preds.reshape(config.train_batch_per_gpu, -1, 4)
+    pred_stds = pred_stds.reshape(config.train_batch_per_gpu, -1, pred_stds.size(1))
     gt_boxes = [gt_boxes[bid, :int(im_info[bid, 5]), :] for bid in range(config.train_batch_per_gpu)]
     for gt_box in gt_boxes:
         obj_mask = torch.where(gt_box[:, -1] == 1)[0] 
@@ -110,19 +111,22 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
                 image_box_prob = torch.zeros(anchors.size(0), config.num_classes-1).type_as(bbox_preds_)
             else:
                 # box_localization: a_{j}^{loc}, shape: [j, 4]
-                sample_pred_boxes = bbox_transform_inv_opr(anchors.unsqueeze(1). \
-                    repeat(1,config.sample_num,1).reshape(-1,4), bbox_preds_)
+                pred_xy_ = bbox_preds_[:, config.num_cell_anchors * 2:]
+                pred_wh_ = bbox_preds_[:, :config.num_cell_anchors * 2]
+                sample_pred_boxes = bbox_transform_inv_opr(anchors.repeat(config.sample_num,1), torch.cat([pred_xy_. \
+                        repeat(config.sample_num,1), pred_wh_.repeat(config.sample_num, 1) + pred_stds[idx,:]. \
+                        repeat(config.sample_num, 1) * torch.randn_like(pred_wh_.repeat(config.sample_num, 1))], dim=1))
 
                 # object_box_iou: IoU_{ij}^{loc}, shape: [i, j]
                 object_box_iou = box_overlap_opr(gt_bboxes_, sample_pred_boxes). \
-                    reshape(len(gt_bboxes_),-1,config.sample_num)
+                                    reshape(len(gt_bboxes_), config.sample_num, -1)
                 if config.multi_sampling_mode == 'max':
-                    object_box_iou = object_box_iou.max(dim=2).values
+                    object_box_iou = object_box_iou.max(dim=1).values
                 elif config.multi_sampling_mode == 'meanmax':
-                    object_box_iou = object_box_iou.reshape(-1,config.sample_num)
-                    weight = 1 / torch.clamp(1 - object_box_iou, 1e-12, None)
-                    weight /= weight.sum(dim=1).unsqueeze(dim=-1)
-                    object_box_iou = (weight * object_box_iou).sum(dim=1).reshape(len(gt_bboxes_),-1)
+                    object_box_iou = object_box_iou.permute(0,2,1).reshape(-1,config.sample_num)
+                    object_box_iou = ((1 / torch.clamp(1 - object_box_iou, 1e-12, None) / (1 / \
+                                    torch.clamp(1 - object_box_iou, 1e-12, None)).sum(dim=1). \
+                                    unsqueeze(dim=-1))*object_box_iou).sum(dim=1).reshape(len(gt_bboxes_),-1)
 
                 # object_box_prob: P{a_{j} -> b_{i}}, shape: [i, j]
                 t1 = config.bbox_thr
@@ -160,19 +164,22 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
                             gt_labels_.view(-1, 1, 1).repeat(1, config.pre_anchor_topk, 1)).squeeze(2)
 
         # box_localization: a_{j}^{loc}, shape: [j, 4]
-        sample_pred_boxes = bbox_transform_inv_opr(anchors.unsqueeze(1). \
-            repeat(1,config.sample_num,1).reshape(-1,4), bbox_preds_)
+        pred_xy_ = bbox_preds_[:, config.num_cell_anchors * 2:]
+        pred_wh_ = bbox_preds_[:, :config.num_cell_anchors * 2]
+        sample_pred_boxes = bbox_transform_inv_opr(anchors.repeat(config.sample_num,1), torch.cat([pred_xy_. \
+                repeat(config.sample_num,1), pred_wh_.repeat(config.sample_num, 1) + pred_stds[idx,:]. \
+                repeat(config.sample_num, 1) * torch.randn_like(pred_wh_.repeat(config.sample_num, 1))], dim=1))
 
         # object_box_iou: IoU_{ij}^{loc}, shape: [i, j]
         object_box_iou = box_overlap_opr(gt_bboxes_, sample_pred_boxes). \
-            reshape(len(gt_bboxes_),-1,config.sample_num)
+                            reshape(len(gt_bboxes_), config.sample_num, -1)
         if config.multi_sampling_mode == 'max':
-            object_box_iou = object_box_iou.max(dim=2).values
+            object_box_iou = object_box_iou.max(dim=1).values
         elif config.multi_sampling_mode == 'meanmax':
-            object_box_iou = object_box_iou.reshape(-1,config.sample_num)
-            weight = 1 / torch.clamp(1 - object_box_iou, 1e-12, None)
-            weight /= weight.sum(dim=1).unsqueeze(dim=-1)
-            object_box_iou = (weight * object_box_iou).sum(dim=1).reshape(len(gt_bboxes_),-1)
+            object_box_iou = object_box_iou.permute(0,2,1).reshape(-1,config.sample_num)
+            object_box_iou = ((1 / torch.clamp(1 - object_box_iou, 1e-12, None) / (1 / \
+                            torch.clamp(1 - object_box_iou, 1e-12, None)).sum(dim=1). \
+                            unsqueeze(dim=-1))*object_box_iou).sum(dim=1).reshape(len(gt_bboxes_),-1)
 
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
         num_pos += len(gt_bboxes_)
