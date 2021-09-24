@@ -154,7 +154,7 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
                 assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
                 pred_boxes = pred_boxes.reshape(-1, 6)
             else:
-                pred_boxes = pred_boxes.reshape(-1, 10)
+                pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
@@ -211,8 +211,8 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_baseline',
-    #                           '--resume_weights', '39'])
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_nwh_approxmean', 
+    #                           '--resume_weights', '38'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
