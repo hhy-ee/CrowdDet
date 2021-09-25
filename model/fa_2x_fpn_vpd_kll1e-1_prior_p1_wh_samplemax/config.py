@@ -43,7 +43,7 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    train_batch_per_gpu = 4
+    train_batch_per_gpu = 1
     momentum = 0.9
     weight_decay = 1e-4
     base_lr = 3.125e-4
@@ -88,7 +88,9 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
-    kl_weight = 1e-2
+    kl_weight = 1e-1
     prior_std = [0.35, 0.35]
+    multi_sampling_mode = 'max'
+    sample_num = 9
     
 config = Config()
