@@ -122,6 +122,8 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, pred_stds, gt_boxes, im_
                                     reshape(len(gt_bboxes_), config.sample_num, -1)
                 if config.multi_sampling_mode == 'max':
                     object_box_iou = object_box_iou.max(dim=1).values
+                elif config.multi_sampling_mode == 'mean':
+                    object_box_iou = object_box_iou.mean(dim=1)
                 elif config.multi_sampling_mode == 'meanmax':
                     object_box_iou = object_box_iou.permute(0,2,1).reshape(-1,config.sample_num)
                     object_box_iou = ((1 / torch.clamp(1 - object_box_iou, 1e-12, None) / (1 / \
@@ -175,6 +177,8 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, pred_stds, gt_boxes, im_
                             reshape(len(gt_bboxes_), config.sample_num, -1)
         if config.multi_sampling_mode == 'max':
             object_box_iou = object_box_iou.max(dim=1).values
+        elif config.multi_sampling_mode == 'mean':
+            object_box_iou = object_box_iou.mean(dim=1)
         elif config.multi_sampling_mode == 'meanmax':
             object_box_iou = object_box_iou.permute(0,2,1).reshape(-1,config.sample_num)
             object_box_iou = ((1 / torch.clamp(1 - object_box_iou, 1e-12, None) / (1 / \
