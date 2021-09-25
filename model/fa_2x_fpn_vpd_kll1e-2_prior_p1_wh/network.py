@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_nvpd_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.my_loss_opr import freeanchor_loss
 from det_oprs.utils import get_padded_tensor
 
@@ -87,11 +87,11 @@ class RetinaNet_Criteria(nn.Module):
         # get ground truth
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
 
-        loss_kld = kldiv_nvpd_loss(
+        loss_kld = kldiv_loss(
                 all_pred_meanwh,
                 all_pred_lstd,
                 config.kl_weight)
-        loss_dict['retina_kldiv_loss'] = loss_kld
+        loss_dict['freeanchor_kldiv_loss'] = loss_kld
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -156,8 +156,8 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 6)[:, :config.num_cell_anchors * 4]
-        pred_lstd = pred_reg_list[l_id][0].reshape(-1, 6)[:, config.num_cell_anchors * 4:]
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 6)[:, :4]
+        pred_lstd = pred_reg_list[l_id][0].reshape(-1, 6)[:, 4:]
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
@@ -179,9 +179,11 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     tag = torch.arange(class_num).type_as(keep_cls)+1
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
     pred_scores = keep_cls.reshape(-1, 1)
+    if config.add_test_noise:
+        keep_reg = keep_reg + 0.05 * torch.randn_like(keep_reg)
     pred_bbox = restore_bbox(keep_anchors, keep_reg, False)
     pred_bbox = pred_bbox.repeat(1, class_num).reshape(-1, 4)
-    if config.save_data:
+    if config.save_data or config.test_nms_method == 'kl_nms':
         pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_lstd], axis=1)
     else:
         pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
