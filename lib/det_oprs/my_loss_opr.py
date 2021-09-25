@@ -111,8 +111,8 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, pred_stds, gt_boxes, im_
                 image_box_prob = torch.zeros(anchors.size(0), config.num_classes-1).type_as(bbox_preds_)
             else:
                 # box_localization: a_{j}^{loc}, shape: [j, 4]
-                pred_xy_ = bbox_preds_[:, config.num_cell_anchors * 2:]
-                pred_wh_ = bbox_preds_[:, :config.num_cell_anchors * 2]
+                pred_xy_ = bbox_preds_[:, :config.num_cell_anchors * 2]
+                pred_wh_ = bbox_preds_[:, config.num_cell_anchors * 2:]
                 sample_pred_boxes = bbox_transform_inv_opr(anchors.repeat(config.sample_num,1), torch.cat([pred_xy_. \
                         repeat(config.sample_num,1), pred_wh_.repeat(config.sample_num, 1) + pred_stds[idx,:]. \
                         repeat(config.sample_num, 1) * torch.randn_like(pred_wh_.repeat(config.sample_num, 1))], dim=1))
@@ -166,8 +166,8 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, pred_stds, gt_boxes, im_
                             gt_labels_.view(-1, 1, 1).repeat(1, config.pre_anchor_topk, 1)).squeeze(2)
 
         # box_localization: a_{j}^{loc}, shape: [j, 4]
-        pred_xy_ = bbox_preds_[:, config.num_cell_anchors * 2:]
-        pred_wh_ = bbox_preds_[:, :config.num_cell_anchors * 2]
+        pred_xy_ = bbox_preds_[:, :config.num_cell_anchors * 2]
+        pred_wh_ = bbox_preds_[:, config.num_cell_anchors * 2:]
         sample_pred_boxes = bbox_transform_inv_opr(anchors.repeat(config.sample_num,1), torch.cat([pred_xy_. \
                 repeat(config.sample_num,1), pred_wh_.repeat(config.sample_num, 1) + pred_stds[idx,:]. \
                 repeat(config.sample_num, 1) * torch.randn_like(pred_wh_.repeat(config.sample_num, 1))], dim=1))
