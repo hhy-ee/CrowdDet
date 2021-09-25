@@ -28,29 +28,41 @@ def inference(args, config, network):
     net.load_state_dict(check_point['state_dict'])
     # get data
     image, resized_img, im_info = get_data(
-            args.img_path, config.eval_image_short_size, config.eval_image_max_size) 
+            args.img_path, config.eval_image_short_size, config.eval_image_max_size)
     pred_boxes = net(resized_img, im_info).numpy()
     pred_boxes = post_process(pred_boxes, config, im_info[0, 2])
+    if config.test_nms_method == 'kl_nms':
+        pred_boxes, supp_boxes = pred_boxes
+    inf_result = visual_utils.inference_result(
+            config.eval_source, args.img_path, pred_boxes, im_info)
     pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
     pred_tags_name = np.array(config.class_names)[pred_tags]
     # inplace draw
-    image = visual_utils.draw_boxes(
+    if config.test_nms_method == 'kl_nms':
+        visual_utils.draw_supp_boxes(
             image,
-            pred_boxes[:, :4],
-            scores=pred_boxes[:, 4],
-            tags=pred_tags_name,
-            line_thick=1, line_color='white')
-    if config.plot_data:
+            pred_boxes,
+            supp_boxes,
+            args,
+            line_thick=1, line_color=('red','green'),
+            )
+    else:
+        image = visual_utils.draw_boxes(
+                image,
+                pred_boxes[:, :4],
+                scores=pred_boxes[:, 4],
+                tags=pred_tags_name,
+                line_thick=1, line_color='white')
+        # plot dist mask for rcnn_mva
         image = visual_utils.draw_dists(
-            image,
-            pred_boxes[:, :4],
-            pred_boxes[:, 6:],
-            config.va_beta,
-            scores=pred_boxes[:, 4])
-
-    name = args.img_path.split('/')[-1].split('.')[-2]
-    fpath = 'outputs/{}.png'.format(name)
-    cv2.imwrite(fpath, image)
+                image,
+                pred_boxes[:, :4],
+                pred_boxes[:, 6:],
+                config.va_beta,
+                scores=pred_boxes[:, 4])
+        name = args.img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
 
 def post_process(pred_boxes, config, scale):
     if config.test_nms_method == 'set_nms':
@@ -75,6 +87,12 @@ def post_process(pred_boxes, config, scale):
         pred_boxes = pred_boxes[keep]
         keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
         pred_boxes = pred_boxes[keep]
+    elif config.test_nms_method == 'kl_nms':
+        keep = pred_boxes[:, 4] > config.pred_cls_threshold
+        pred_boxes = pred_boxes[keep]
+        keep, supp = nms_utils.cpu_plot_kl_nms(pred_boxes, config.test_nms)
+        pre_nms_boxes = pred_boxes
+        pred_boxes = pred_boxes[keep]
     elif config.test_nms_method == 'none':
         assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
         pred_boxes = pred_boxes.reshape(-1, 6)
@@ -87,8 +105,14 @@ def post_process(pred_boxes, config, scale):
     #    pred_boxes = pred_boxes[order]
     # recovery the scale
     pred_boxes[:, :4] /= scale
-    vis_keep = pred_boxes[:, 4] > config.visulize_threshold
+    # vis_keep = pred_boxes[:, 4] > config.visulize_threshold
+    vis_keep = pred_boxes[:, 4] >= 0
     pred_boxes = pred_boxes[vis_keep]
+    if config.test_nms_method == 'kl_nms':
+        pre_nms_boxes[:, :4] /= scale
+        boxes_supp = supp[:vis_keep.sum()]
+        supp_boxes = [pre_nms_boxes[box_supp] for box_supp in boxes_supp]
+        pred_boxes = [pred_boxes, supp_boxes]
     return pred_boxes
 
 def get_data(img_path, short_size, max_size):
@@ -121,10 +145,10 @@ def run_inference():
     parser.add_argument('--model_dir', '-md', default=None, required=True, type=str)
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
-    # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'rcnn_fpn_mva_mask_beta_1_0.5_fc',
-                                '--resume_weights', '30',
-                                '--img_path', './data/CrowdHuman/Images/273275,c5d22000e47802ff.jpg'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh',
+    #                             '--resume_weights', '38',
+    #                             '--img_path', './data/CrowdHuman/Images/273275,720840003a49cf5b.jpg'])
     
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

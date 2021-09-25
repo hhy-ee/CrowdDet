@@ -77,6 +77,79 @@ def cpu_nms(dets, base_thr):
         order = order[inds + 1]
     return np.array(keep)
 
+def cpu_kl_nms(dets, base_thr):
+    """Pure Python NMS baseline."""
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+    lstd = dets[:, 6:].mean(1)
+
+    areas = (x2 - x1) * (y2 - y1)
+    order = np.argsort(-scores)
+
+    keep = []
+    real_keep = []
+    eps = 1e-8
+    while len(order) > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1)
+        h = np.maximum(0.0, yy2 - yy1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
+
+        inds = np.where(ovr <= base_thr)[0]
+        indices = np.where(ovr > base_thr)[0]
+        high_scr_idx = np.where(scores[order[indices + 1]] > scores[i]-0.1)[0]
+        if scores[i] > 0.3 and scores[i] < 0.7 and len(high_scr_idx) > 0:
+            high_std_idx = np.argmax(lstd[order[indices + 1]][high_scr_idx])
+            real_keep.append(order[indices + 1][high_std_idx])
+        else:
+            real_keep.append(i)
+        order = order[inds + 1]
+    return np.array(real_keep)
+
+def cpu_plot_kl_nms(dets, base_thr):
+    """Pure Python NMS baseline."""
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+    lstd = dets[:, 6:].mean(1)
+
+    areas = (x2 - x1) * (y2 - y1)
+    order = np.argsort(-scores)
+
+    keep = []
+    supp = []
+    eps = 1e-8
+    while len(order) > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1)
+        h = np.maximum(0.0, yy2 - yy1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
+
+        inds = np.where(ovr <= base_thr)[0]
+        indices = np.where(ovr > base_thr)[0]
+        supp.append(order[indices + 1])
+        order = order[inds + 1]
+    return np.array(keep), supp
+
 def _test():
     box1 = np.array([33,45,145,230,0.7])[None,:]
     box2 = np.array([44,54,123,348,0.8])[None,:]

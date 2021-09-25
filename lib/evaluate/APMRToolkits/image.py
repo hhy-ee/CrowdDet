@@ -95,7 +95,7 @@ class Image(object):
             if maxpos >= 0:
                 if gtboxes[maxpos, -1] > 0:
                     gt_matched[maxpos] = 1
-                    dt_matched[i] = 1
+                    dt_matched[i] = maxpos+1
                     scorelist.append((dt, 1, self.ID))
                 else:
                     dt_matched[i] = -1

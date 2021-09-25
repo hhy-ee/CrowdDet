@@ -36,6 +36,7 @@ def eval_all(args, config, network):
     # multiprocessing
     num_devs = len(devices)
     len_dataset = len(crowdhuman)
+    # len_dataset = 5
     num_image = math.ceil(len_dataset / num_devs)
     result_queue = Queue(500)
     procs = []
@@ -71,7 +72,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(30, int(args.resume_weights)+1):
+    for epoch_id in range(18, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -165,6 +166,14 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
                 pred_lstd = pred_boxes[:, 6:]
                 save_data(pred_scores, pred_tags, pred_lstd)
             pred_boxes = pred_boxes[:, :6]
+        elif config.test_nms_method == 'kl_nms':
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
+            keep = pred_boxes[:, 4] > config.pred_cls_threshold
+            pred_boxes = pred_boxes[keep]
+            keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
+            # keep = nms_utils.cpu_kl_nms(pred_boxes, config.test_nms)
+            pred_boxes = pred_boxes[keep]
+            pred_boxes = pred_boxes
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
             pred_boxes = pred_boxes.reshape(-1, 6)
@@ -187,7 +196,12 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
         result_queue.put_nowait(result_dict)
 
 def boxes_dump(boxes):
-    if boxes.shape[-1] == 7:
+    if boxes.shape[-1] == 8:
+        result = [{'box':[round(i, 1) for i in box[:4].tolist()],
+                   'score':round(float(box[4]), 5),
+                   'tag':int(box[5]),
+                   'lstd':float(box[6:].mean())} for box in boxes]
+    elif boxes.shape[-1] == 7:
         result = [{'box':[round(i, 1) for i in box[:4]],
                    'score':round(float(box[4]), 5),
                    'tag':int(box[5]),
@@ -211,15 +225,15 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_nwh_approxmean', 
-    #                           '--resume_weights', '38'])
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh', 
+    #                           '--resume_weights', '38', '-d', '0-1'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    eval_all_epoch(args, config, Network)
+    eval_all(args, config, Network)
 
 def save_data(scores, ious, dists):
     import numpy as np
