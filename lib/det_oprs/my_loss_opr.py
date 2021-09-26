@@ -228,24 +228,22 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
                 image_box_prob = torch.zeros(anchors.size(0), config.num_classes-1).type_as(bbox_preds_)
             else:
                 # box_localization: a_{j}^{loc}, shape: [j, 4]
-                approx_bbox_preds_ = bbox_preds_.unsqueeze(1).repeat(1, \
-                    config.num_cell_approx_anchors,1).reshape(-1,4) + approx_samples
-                approx_pred_boxes = bbox_transform_inv_opr(anchors.unsqueeze(1). \
-                    repeat(1,config.num_cell_approx_anchors,1).reshape(-1,4), approx_bbox_preds_)
+                approx_bbox_preds_ = bbox_preds_.repeat(config.sample_num,1) + approx_samples
+                approx_pred_boxes_ = bbox_transform_inv_opr(
+                                        anchors.repeat(config.sample_num,1), approx_bbox_preds_)
                 q0 = torch.distributions.normal.Normal(0, std_preds[idx])
-                bbox_log_prob = q0.log_prob(approx_samples.reshape(-1, \
-                                config.num_cell_approx_anchors,4)[..., 2:].permute(1,0,2))
-                bbox_prob = bbox_log_prob.permute(2,1,0).sum(dim=0).exp()
-                bbox_norm_prob = bbox_prob / torch.sum(bbox_prob, dim=1, keepdim=True)
+                bbox_log_prob = q0.log_prob(approx_samples.reshape(config.sample_num,-1,4)[..., 2:])
+                bbox_prob = torch.sum(bbox_log_prob, dim=2).exp()
+                bbox_norm_prob = bbox_prob / torch.sum(bbox_prob, dim=0, keepdim=True)
 
                 # object_box_iou: IoU_{ij}^{loc}, shape: [i, j]
-                object_box_iou = box_overlap_opr(gt_bboxes_, approx_pred_boxes). \
-                    reshape(len(gt_bboxes_),-1,config.num_cell_approx_anchors)
-                object_box_iou = object_box_iou.mul(bbox_norm_prob.unsqueeze(0))
+                object_box_iou = box_overlap_opr(gt_bboxes_, approx_pred_boxes_). \
+                                    reshape(len(gt_bboxes_), config.sample_num, -1)
+                object_box_iou = object_box_iou.mul(bbox_norm_prob)
                 if config.multi_sampling_mode == 'max':
-                    object_box_iou = object_box_iou.max(dim=2).values
+                    object_box_iou = object_box_iou.max(dim=1).values
                 elif config.multi_sampling_mode == 'mean':
-                    object_box_iou = object_box_iou.mean(dim=2)
+                    object_box_iou = object_box_iou.mean(dim=1)
 
                 # object_box_prob: P{a_{j} -> b_{i}}, shape: [i, j]
                 t1 = config.bbox_thr
@@ -283,23 +281,22 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
                             gt_labels_.view(-1, 1, 1).repeat(1, config.pre_anchor_topk, 1)).squeeze(2)
 
         # matched_box_prob: P_{ij}^{loc}
-        approx_bbox_preds_ = bbox_preds_.unsqueeze(1).repeat(1, \
-            config.num_cell_approx_anchors,1).reshape(-1,4) + approx_samples
-        approx_pred_boxes = bbox_transform_inv_opr(anchors.unsqueeze(1). \
-            repeat(1,config.num_cell_approx_anchors,1).reshape(-1,4), approx_bbox_preds_)
+        approx_bbox_preds_ = bbox_preds_.repeat(config.sample_num,1) + approx_samples
+        approx_pred_boxes_ = bbox_transform_inv_opr(
+                                anchors.repeat(config.sample_num,1), approx_bbox_preds_)
         q0 = torch.distributions.normal.Normal(0, std_preds[idx])
-        bbox_log_prob = q0.log_prob(approx_samples.reshape(-1, \
-                        config.num_cell_approx_anchors,4)[..., 2:].permute(1,0,2))
-        bbox_prob = bbox_log_prob.permute(2,1,0).sum(dim=0).exp()
-        bbox_norm_prob = bbox_prob / torch.sum(bbox_prob, dim=1, keepdim=True)
+        bbox_log_prob = q0.log_prob(approx_samples.reshape(config.sample_num,-1,4)[..., 2:])
+        bbox_prob = torch.sum(bbox_log_prob, dim=2).exp()
+        bbox_norm_prob = bbox_prob / torch.sum(bbox_prob, dim=0, keepdim=True)
 
-        object_box_iou = box_overlap_opr(gt_bboxes_, approx_pred_boxes). \
-            reshape(len(gt_bboxes_),-1,config.num_cell_approx_anchors)
-        object_box_iou = object_box_iou.mul(bbox_norm_prob.unsqueeze(0))
+        # object_box_iou: IoU_{ij}^{loc}, shape: [i, j]
+        object_box_iou = box_overlap_opr(gt_bboxes_, approx_pred_boxes_). \
+                            reshape(len(gt_bboxes_), config.sample_num, -1)
+        object_box_iou = object_box_iou.mul(bbox_norm_prob)
         if config.multi_sampling_mode == 'max':
-            object_box_iou = object_box_iou.max(dim=2).values
+            object_box_iou = object_box_iou.max(dim=1).values
         elif config.multi_sampling_mode == 'mean':
-            object_box_iou = object_box_iou.mean(dim=2)
+            object_box_iou = object_box_iou.mean(dim=1)
 
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
         num_pos += len(gt_bboxes_)
