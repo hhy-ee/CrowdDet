@@ -50,7 +50,7 @@ class Config:
     weight_decay = 1e-4
     base_lr = 1e-3 * 1.25
 
-    warm_iter = 800
+    warm_iter = 3200
     max_epoch = 30
     lr_decay = [24, 27]
     nr_images_epoch = 15000
