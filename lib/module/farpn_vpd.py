@@ -25,7 +25,7 @@ class RPN(nn.Module):
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
 
-    def forward(self, features, im_info, boxes=None):
+    def forward(self, features, im_info, boxes=None, epoch=None):
         # prediction
         pred_cls_score_list = []
         pred_bbox_offsets_list = []
@@ -42,16 +42,6 @@ class RPN(nn.Module):
             layer_anchors = self.anchors_generator(fm, base_stride, off_stride)
             off_stride = off_stride // 2
             all_anchors_list.append(layer_anchors)
-        
-        # variational inference
-        # all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
-        # all_pred_meanxy = all_pred_mean[:, :config.num_cell_anchors * 2]
-        # all_pred_meanwh = all_pred_mean[:, config.num_cell_anchors * 2:]
-        # all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
-        # scale = torch.tensor(config.prior_std).type_as(all_pred_lstd)
-        # pred_scale_std = all_pred_lstd.exp().mul(scale)
-        # all_pred_reg = torch.cat([all_pred_meanxy, all_pred_meanwh + pred_scale_std * 
-        #                         torch.randn_like(all_pred_meanwh)], dim=1)
 
         list_size = len(pred_bbox_offsets_list)
         if self.training:
@@ -91,10 +81,11 @@ class RPN(nn.Module):
             loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, boxes, im_info)
             all_pred_meanwh = torch.cat(pred_mean_list, axis=1).reshape(-1, 2)
             all_pred_lstd = torch.cat(pred_lstd_list, axis=1).reshape(-1, 2)
+            kl_weight = config.kl_weight * np.power(config.kl_decay, epoch/config.max_epoch)
             loss_kld = kldiv_loss(
                 all_pred_meanwh,
                 all_pred_lstd,
-                config.kl_weight)
+                kl_weight)
             loss_dict['freeanchor_kldiv_loss'] = loss_kld
             return rpn_rois, loss_dict
         else:

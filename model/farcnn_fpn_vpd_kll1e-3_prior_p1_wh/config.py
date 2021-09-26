@@ -107,7 +107,8 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
-    kl_weight = 1e-1
+    kl_weight = 1e-3
     prior_std = [0.35, 0.35]
+    kl_decay = 100
 
 config = Config()

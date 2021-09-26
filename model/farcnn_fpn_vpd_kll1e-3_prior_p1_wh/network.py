@@ -26,15 +26,15 @@ class Network(nn.Module):
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
         image = get_padded_tensor(image, 64)
         if self.training:
-            return self._forward_train(image, im_info, gt_boxes)
+            return self._forward_train(image, im_info, gt_boxes, epoch)
         else:
             return self._forward_test(image, im_info)
 
-    def _forward_train(self, image, im_info, gt_boxes):
+    def _forward_train(self, image, im_info, gt_boxes, epoch):
         loss_dict = {}
         fpn_fms = self.FPN(image)
         # fpn_fms stride: 64,32,16,8,4, p6->p2
-        rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
+        rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes, epoch)
         rcnn_rois, rcnn_labels, rcnn_bbox_targets = fpn_roi_target(
                 rpn_rois, im_info, gt_boxes, top_k=1)
         loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois,
