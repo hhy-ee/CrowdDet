@@ -103,11 +103,10 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
         all_pred_std = all_pred_lstd.exp().mul(torch.tensor(config.prior_std).type_as(all_pred_lstd))
         approx_samples = bbox_transform_opr(all_anchors.repeat(config.sample_num,1), all_approx_anchors)
-        all_pred_reg = all_pred_mean
 
         # get ground truth
         loss_dict = freeanchor_avpd_loss(all_anchors, approx_samples, all_pred_cls, 
-                                        all_pred_reg, all_pred_std, gt_boxes, im_info)
+                                        all_pred_mean, all_pred_std, gt_boxes, im_info)
 
         loss_kld = kldiv_loss(
                 all_pred_meanwh,
