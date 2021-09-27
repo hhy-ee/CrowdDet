@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 
@@ -31,14 +31,23 @@ def inference(args, config, network):
             args.img_path, config.eval_image_short_size, config.eval_image_max_size)
     pred_boxes = net(resized_img, im_info).numpy()
     pred_boxes = post_process(pred_boxes, config, im_info[0, 2])
-    if config.test_nms_method == 'kl_nms':
+    if config.plot_type != 'normal_plot':
         pred_boxes, supp_boxes = pred_boxes
-    inf_result = visual_utils.inference_result(
-            config.eval_source, args.img_path, pred_boxes, im_info)
+        inf_result, gt_boxes, gt_matched = visual_utils.inference_result(
+                config.eval_source, args.img_path, pred_boxes, im_info)
     pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
     pred_tags_name = np.array(config.class_names)[pred_tags]
     # inplace draw
-    if config.test_nms_method == 'kl_nms':
+    if config.plot_type == 'my_plot':
+        visual_utils.draw_my_boxes(
+            image,
+            pred_boxes,
+            (supp_boxes, inf_result, gt_boxes, gt_matched),
+            args,
+            line_thick=1, line_color=('red','green'),
+            )
+
+    elif config.plot_type == 'plot_supp':
         visual_utils.draw_supp_boxes(
             image,
             pred_boxes,
@@ -46,13 +55,8 @@ def inference(args, config, network):
             args,
             line_thick=1, line_color=('red','green'),
             )
-    else:
-        image = visual_utils.draw_boxes(
-                image,
-                pred_boxes[:, :4],
-                scores=pred_boxes[:, 4],
-                tags=pred_tags_name,
-                line_thick=1, line_color='white')
+
+    elif config.plot_type == 'plot_dist':
         # plot dist mask for rcnn_mva
         image = visual_utils.draw_dists(
                 image,
@@ -63,6 +67,18 @@ def inference(args, config, network):
         name = args.img_path.split('/')[-1].split('.')[-2]
         fpath = 'outputs/{}.png'.format(name)
         cv2.imwrite(fpath, image)
+
+    elif config.plot_type == 'normal_plot':
+        image = visual_utils.draw_boxes(
+                image,
+                pred_boxes[:, :4],
+                scores=pred_boxes[:, 4],
+                tags=pred_tags_name,
+                line_thick=1, line_color='white')
+        name = args.img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
+
 
 def post_process(pred_boxes, config, scale):
     if config.test_nms_method == 'set_nms':
@@ -77,7 +93,7 @@ def post_process(pred_boxes, config, scale):
         pred_boxes = pred_boxes[keep]
         keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
         pred_boxes = pred_boxes[keep]
-    elif config.test_nms_method == 'normal_nms':
+    elif config.test_nms_method == 'normal_nms' and config.plot_type == 'normal_plot':
         if config.plot_data:
                 pred_boxes = pred_boxes.reshape(-1, 10)
         else:
@@ -87,10 +103,10 @@ def post_process(pred_boxes, config, scale):
         pred_boxes = pred_boxes[keep]
         keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
         pred_boxes = pred_boxes[keep]
-    elif config.test_nms_method == 'kl_nms':
+    elif config.plot_type != 'normal_plot':
         keep = pred_boxes[:, 4] > config.pred_cls_threshold
         pred_boxes = pred_boxes[keep]
-        keep, supp = nms_utils.cpu_plot_kl_nms(pred_boxes, config.test_nms)
+        keep, supp = nms_utils.nms_for_plot(pred_boxes, config.test_nms)
         pre_nms_boxes = pred_boxes
         pred_boxes = pred_boxes[keep]
     elif config.test_nms_method == 'none':
@@ -105,11 +121,13 @@ def post_process(pred_boxes, config, scale):
     #    pred_boxes = pred_boxes[order]
     # recovery the scale
     pred_boxes[:, :4] /= scale
+    pred_boxes[:, 8:] /= scale
     # vis_keep = pred_boxes[:, 4] > config.visulize_threshold
     vis_keep = pred_boxes[:, 4] >= 0
     pred_boxes = pred_boxes[vis_keep]
-    if config.test_nms_method == 'kl_nms':
+    if config.plot_type != 'normal_plot':
         pre_nms_boxes[:, :4] /= scale
+        pre_nms_boxes[:, 8:] /= scale
         boxes_supp = supp[:vis_keep.sum()]
         supp_boxes = [pre_nms_boxes[box_supp] for box_supp in boxes_supp]
         pred_boxes = [pred_boxes, supp_boxes]
@@ -145,10 +163,10 @@ def run_inference():
     parser.add_argument('--model_dir', '-md', default=None, required=True, type=str)
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
-    args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh',
-    #                             '--resume_weights', '38',
-    #                             '--img_path', './data/CrowdHuman/Images/273275,720840003a49cf5b.jpg'])
+    # args = parser.parse_args()
+    args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh',
+                                '--resume_weights', '38',
+                                '--img_path', './data/CrowdHuman/Images/273275,e99d80007220d4b6.jpg'])
     
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

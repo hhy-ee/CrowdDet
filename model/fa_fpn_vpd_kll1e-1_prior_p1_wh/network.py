@@ -183,8 +183,8 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         keep_reg = keep_reg + 0.05 * torch.randn_like(keep_reg)
     pred_bbox = restore_bbox(keep_anchors, keep_reg, False)
     pred_bbox = pred_bbox.repeat(1, class_num).reshape(-1, 4)
-    if config.save_data or config.test_nms_method == 'kl_nms':
-        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_lstd], axis=1)
+    if config.save_data or config.plot_type != 'normal_plot':
+        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_lstd, keep_anchors], axis=1)
     else:
         pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
     return pred_bbox

@@ -35,6 +35,7 @@ def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='whi
             cv2.putText(img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color[line_color], line_thick)
     return img
 
+
 def draw_supp_boxes(img, boxes, supp_boxes, args, line_thick=1, line_color=('red','green')):
     width = img.shape[1]
     height = img.shape[0]
@@ -66,6 +67,67 @@ def draw_supp_boxes(img, boxes, supp_boxes, args, line_thick=1, line_color=('red
         name = args.img_path.split('/')[-1].split('.')[-2]
         fpath = 'outputs/{}_gt{:d}.png'.format(name, i)
         cv2.imwrite(fpath, plot_img)
+
+
+def draw_my_boxes(img, boxes, plot_box_info, args, line_thick=1, line_color=('red','green')):
+    width = img.shape[1]
+    height = img.shape[0]
+    (supp_boxes, inf_result, gt_boxes, gt_matched) = plot_box_info
+    boxes_scr = boxes[:, 4]
+    boxes_loc = boxes[:, :4]
+    boxes_lstd = boxes[:, 6:8].mean(1)
+    boxes_anchor = boxes[:, 8:12]
+    supp_boxes_scr = [supp_box[:, 4] for supp_box in supp_boxes]
+    supp_boxes_loc = [supp_box[:, :4] for supp_box in supp_boxes]
+    supp_boxes_lstd = [supp_box[:, 6:8].mean(1) for supp_box in supp_boxes]
+
+    if_tp = np.where(np.array([re[1] for re in inf_result]) == 0)[0]
+    dt_match = np.array([re[2] for re in inf_result])
+    dt_iou = np.array([re[3] for re in inf_result])
+
+    for i in range(len(if_tp)):
+        plot_img = img
+        gt_idx_for_fp = dt_match[if_tp[i]]
+        tp_dt_idx = int(gt_matched[gt_idx_for_fp] - 1)
+        # plot tp
+        one_box = boxes_loc[tp_dt_idx]
+        one_anchor = boxes_anchor[tp_dt_idx]
+        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
+        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+        a1,b1,a2,b2 = np.array(one_anchor[:4]).astype(int)
+        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[0]], line_thick)
+        cv2.rectangle(plot_img, (a1,b1), (a2,b2), color[line_color[1]], line_thick)
+        text = "{:.3f} {:.3f}".format(dt_iou[tp_dt_idx], boxes_lstd[tp_dt_idx])
+        cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
+
+        # plot fp
+        one_box = boxes_loc[if_tp[i]]
+        one_anchor = boxes_anchor[if_tp[i]]
+        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
+        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+        a1,b1,a2,b2 = np.array(one_anchor[:4]).astype(int)
+        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color['black'], line_thick)
+        cv2.rectangle(plot_img, (a1,b1), (a2,b2), color['blue'], line_thick)
+        text = "{:.3f} {:.3f}".format(dt_iou[if_tp[i]], boxes_lstd[if_tp[i]])
+        cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
+
+
+        # for j in range(3):
+        #     high_scr_idx = np.where(supp_boxes_scr[i] > boxes_scr[i] - (j+1)/10)[0]
+        #     high_std_idx = np.argmax(supp_boxes_lstd[i][high_scr_idx])
+        #     supp_box = supp_boxes_loc[i][high_std_idx]
+        #     supp_box = np.array([max(supp_box[0], 0), max(supp_box[1], 0),
+        #                 min(supp_box[2], width - 1), min(supp_box[3], height - 1)])
+        #     x1,y1,x2,y2 = np.array(supp_box[:4]).astype(int)
+        #     cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[1]], line_thick)
+        #     text = "{:.3f} {:.3f}".format(supp_boxes_scr[i][high_std_idx], supp_boxes_lstd[i][high_std_idx])
+        #     cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
+        name = args.img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}_gt{:d}.png'.format(name, i)
+        cv2.imwrite(fpath, plot_img)
+
 
 def draw_dists(img, boxes, dists, va_beta, scores=None):
     width = img.shape[1]
@@ -99,8 +161,8 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 def inference_result(gt_path, img_path, pred_boxes, im_info):
-    pred_boxes_lstd = np.mean(pred_boxes[:,6:], axis=1, keepdims=True)
-    pred_boxes = np.concatenate([pred_boxes[:,:6], pred_boxes_lstd], axis=1)
+    pred_boxes_lstd = np.mean(pred_boxes[:,6:8], axis=1, keepdims=True)
+    pred_boxes = np.concatenate([pred_boxes[:,:6], pred_boxes_lstd, pred_boxes[:,8:]], axis=1)
     with open(gt_path, "r") as f:
         lines = f.readlines()
         records = [json.loads(line.strip('\n')) for line in lines]
@@ -109,8 +171,9 @@ def inference_result(gt_path, img_path, pred_boxes, im_info):
             h, w=int(im_info[0, -3]), int(im_info[0, -2])
             gt_bboxes = load_gt_boxes(record, 'gtboxes')
             pred_boxes, gt_bboxes = clip_all_boader(pred_boxes, gt_bboxes, h, w)
-            compare_caltech(pred_boxes, gt_bboxes, 0.5)
-            break
+            score_list, gt_list, gt_matched = compare_caltech(pred_boxes, gt_bboxes, 0.5)
+            score_list.sort(key=lambda x: x[0][4], reverse=True)
+    return score_list, gt_list, gt_matched
 
 def compare_caltech(dtboxes, gtboxes, thres):
     """
@@ -122,8 +185,8 @@ def compare_caltech(dtboxes, gtboxes, thres):
     dt_matched = np.zeros(len(dtboxes))
     gt_matched = np.zeros(len(gtboxes))
 
-    dtboxes = np.array(sorted(dtboxes, key=lambda x: x[-1], reverse=True))
-    gtboxes = np.array(sorted(gtboxes, key=lambda x: x[-1], reverse=True))
+    dtboxes = np.array(sorted(dtboxes, key=lambda x: x[4], reverse=True))
+    gtboxes = np.array(sorted(gtboxes, key=lambda x: x[4], reverse=True))
     if len(dtboxes):
         overlap_iou = box_overlap_opr(dtboxes, gtboxes, True)
         overlap_ioa = box_overlap_opr(dtboxes, gtboxes, False)
@@ -135,7 +198,7 @@ def compare_caltech(dtboxes, gtboxes, thres):
         maxpos = -1
         maxiou = thres
         for j, gt in enumerate(gtboxes):
-            if gt_matched[j] == 1:
+            if gt_matched[j] >= 1:
                 continue
             if gt[-1] > 0:
                 overlap = overlap_iou[i][j]
@@ -152,13 +215,19 @@ def compare_caltech(dtboxes, gtboxes, thres):
                         maxpos = j
         if maxpos >= 0:
             if gtboxes[maxpos, -1] > 0:
-                gt_matched[maxpos] = 1
+                gt_matched[maxpos] = int(1 + i)
                 dt_matched[i] = maxpos+1
+                maxj = overlap_iou[i].argmax()
+                scorelist.append((dt, 1, maxj, overlap_iou[i][maxj]))
             else:
                 dt_matched[i] = -1
+                maxj = overlap_iou[i].argmax()
+                scorelist.append((dt, -1, maxj, overlap_iou[i][maxj]))
         else:
             dt_matched[i] = 0
-    return gt_matched
+            maxj = overlap_iou[i].argmax()
+            scorelist.append((dt, 0, maxj, overlap_iou[i][maxj]))
+    return scorelist, gtboxes, gt_matched
 
 def box_overlap_opr(dboxes:np.ndarray, gboxes:np.ndarray, if_iou):
     eps = 1e-6

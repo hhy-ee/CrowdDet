@@ -59,8 +59,8 @@ class Config:
     # ----------test config---------- #
     test_layer_topk = 1000
     test_nms = 0.5
-    test_nms_method = 'kl_nms'
-    # test_nms_method = 'normal_nms'
+    test_nms_method = 'normal_nms'
+    
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -83,6 +83,7 @@ class Config:
     allow_low_quality = True
     save_data = False
     add_test_noise = False
+    plot_type = 'my_plot'
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6

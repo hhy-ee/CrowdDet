@@ -25,8 +25,7 @@ class Image(object):
             self._height = record["height"]
         if gtflag:
             self._gtNum = len(record["gtboxes"])
-            # body_bbox, head_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
-            body_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
+            body_bbox, head_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
             if self.eval_mode == 0:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
@@ -37,6 +36,9 @@ class Image(object):
                 gt_tag = np.array([body_bbox[i,-1]!=-1 and head_bbox[i,-1]!=-1 for i in range(len(body_bbox))])
                 self._ignNum = (gt_tag == 0).sum()
                 self.gtboxes = np.hstack((body_bbox[:, :-1], head_bbox[:, :-1], gt_tag.reshape(-1, 1)))
+            elif self.eval_mode == 3:
+                self.gtboxes = body_bbox
+                self._ignNum = (body_bbox[:, -1] == -1).sum()
             else:
                 raise Exception('Unknown evaluation mode!')
         if not gtflag:
@@ -49,6 +51,8 @@ class Image(object):
                 body_dtboxes = self.load_det_boxes(record, 'dtboxes', body_key)
                 head_dtboxes = self.load_det_boxes(record, 'dtboxes', head_key, 'score')
                 self.dtboxes = np.hstack((body_dtboxes, head_dtboxes))
+            elif self.eval_mode == 3:
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd')
             else:
                 raise Exception('Unknown evaluation mode!')
 
@@ -102,6 +106,59 @@ class Image(object):
             else:
                 dt_matched[i] = 0
                 scorelist.append((dt, 0, self.ID))
+        return scorelist
+
+    def my_compare_caltech(self, thres):
+        """
+        :meth: match the detection results with the groundtruth by Caltech matching strategy
+        :param thres: iou threshold
+        :type thres: float
+        :return: a list of tuples (dtbox, imageID), in the descending sort of dtbox.score
+        """
+        dtboxes = self.dtboxes if self.dtboxes is not None else list()
+        gtboxes = self.gtboxes if self.gtboxes is not None else list()
+        dt_matched = np.zeros(len(dtboxes))
+        gt_matched = np.zeros(len(gtboxes))
+
+        dtboxes = np.array(sorted(dtboxes, key=lambda x: x[-2], reverse=True))
+        gtboxes = np.array(sorted(gtboxes, key=lambda x: x[-1], reverse=True))
+        if len(dtboxes):
+            overlap_iou = self.box_overlap_opr(dtboxes, gtboxes, True)
+            overlap_ioa = self.box_overlap_opr(dtboxes, gtboxes, False)
+        else:
+            return list()
+
+        scorelist = list()
+        for i, dt in enumerate(dtboxes):
+            maxpos = -1
+            maxiou = thres
+            for j, gt in enumerate(gtboxes):
+                if gt_matched[j] == 1:
+                    continue
+                if gt[-1] > 0:
+                    overlap = overlap_iou[i][j]
+                    if overlap > maxiou:
+                        maxiou = overlap
+                        maxpos = j
+                else:
+                    if maxpos >= 0:
+                        break
+                    else:
+                        overlap = overlap_ioa[i][j]
+                        if overlap > thres:
+                            maxiou = overlap
+                            maxpos = j
+            if maxpos >= 0:
+                if gtboxes[maxpos, -1] > 0:
+                    gt_matched[maxpos] = 1
+                    dt_matched[i] = maxpos+1
+                    scorelist.append((dt, 1, overlap_iou[i][maxpos]))
+                else:
+                    dt_matched[i] = -1
+            else:
+                dt_matched[i] = 0
+                maxj = overlap_iou[i].argmax()
+                scorelist.append((dt, 0, overlap_iou[i][maxj]))
         return scorelist
 
     def compare_caltech_union(self, thres):
@@ -224,14 +281,13 @@ class Image(object):
                 if 'ignore' in rb['head_attr']:
                     if rb['head_attr']['ignore'] != 0:
                         head_tag = -1
-            # head_bbox.append(np.hstack((rb['hbox'], head_tag)))
+            head_bbox.append(np.hstack((rb['hbox'], head_tag)))
             body_bbox.append(np.hstack((rb['fbox'], body_tag)))
-        # head_bbox = np.array(head_bbox)
-        # head_bbox[:, 2:4] += head_bbox[:, :2]
+        head_bbox = np.array(head_bbox)
+        head_bbox[:, 2:4] += head_bbox[:, :2]
         body_bbox = np.array(body_bbox)
         body_bbox[:, 2:4] += body_bbox[:, :2]
-        # return body_bbox, head_bbox
-        return body_bbox
+        return body_bbox, head_bbox
 
     def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None):
         assert key_name in dict_input

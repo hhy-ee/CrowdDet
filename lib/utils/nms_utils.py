@@ -84,7 +84,7 @@ def cpu_kl_nms(dets, base_thr):
     x2 = dets[:, 2]
     y2 = dets[:, 3]
     scores = dets[:, 4]
-    lstd = dets[:, 6:].mean(1)
+    lstd = dets[:, 6:8].mean(1)
 
     areas = (x2 - x1) * (y2 - y1)
     order = np.argsort(-scores)
@@ -94,6 +94,22 @@ def cpu_kl_nms(dets, base_thr):
     eps = 1e-8
     while len(order) > 0:
         i = order[0]
+
+        # kl_nms before normalnms
+        # xx1 = np.maximum(x1[i], x1[order])
+        # yy1 = np.maximum(y1[i], y1[order])
+        # xx2 = np.minimum(x2[i], x2[order])
+        # yy2 = np.minimum(y2[i], y2[order])
+
+        # w = np.maximum(0.0, xx2 - xx1)
+        # h = np.maximum(0.0, yy2 - yy1)
+        # inter = w * h
+        # ovr = inter / (areas[i] + areas[order] - inter + eps)
+        # candidate_inds = np.where(ovr >= 0.9)[0]
+        # candidate_lstd = lstd[order[candidate_inds]]
+        # i = order[candidate_inds[np.argmin(candidate_lstd)]]
+
+        # normal nms
         keep.append(i)
         xx1 = np.maximum(x1[i], x1[order[1:]])
         yy1 = np.maximum(y1[i], y1[order[1:]])
@@ -106,17 +122,19 @@ def cpu_kl_nms(dets, base_thr):
         ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
 
         inds = np.where(ovr <= base_thr)[0]
-        indices = np.where(ovr > base_thr)[0]
-        high_scr_idx = np.where(scores[order[indices + 1]] > scores[i]-0.1)[0]
-        if scores[i] > 0.3 and scores[i] < 0.7 and len(high_scr_idx) > 0:
-            high_std_idx = np.argmax(lstd[order[indices + 1]][high_scr_idx])
-            real_keep.append(order[indices + 1][high_std_idx])
-        else:
-            real_keep.append(i)
+        supp_inds = np.where(ovr > base_thr)[0]
         order = order[inds + 1]
-    return np.array(real_keep)
 
-def cpu_plot_kl_nms(dets, base_thr):
+        ambi_inds = np.where((ovr <= base_thr) * (ovr > base_thr - 0.1))[0]
+        ambi_order = order[ambi_inds + 1]
+        supp_order = order[supp_inds + 1]
+        if ambi_order.shape[0] != 0 and supp_order.shape[0] != 0:    
+            exsupp_idx = np.where(lstd[ambi_order] < lstd[supp_order].mean())[0]
+            order = np.where(order == ambi_order[exsupp_idx])
+            
+    return np.array(keep)
+
+def nms_for_plot(dets, base_thr):
     """Pure Python NMS baseline."""
     x1 = dets[:, 0]
     y1 = dets[:, 1]
