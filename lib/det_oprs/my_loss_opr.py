@@ -240,11 +240,15 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
                 # object_box_iou: IoU_{ij}^{loc}, shape: [i, j]
                 object_box_iou = box_overlap_opr(gt_bboxes_, approx_pred_boxes_). \
                                     reshape(len(gt_bboxes_), config.sample_num, -1)
-                object_box_iou = object_box_iou.mul(bbox_norm_prob)
                 if config.multi_sampling_mode == 'max':
+                    object_box_iou = object_box_iou.mul(bbox_norm_prob)
                     object_box_iou = object_box_iou.max(dim=1).values
                 elif config.multi_sampling_mode == 'mean':
                     object_box_iou = object_box_iou.mean(dim=1)
+                elif config.multi_sampling_mode == 'meanmax':
+                    weight = 1 / torch.clamp(1 - object_box_iou, 1e-12, None)
+                    weight /= weight.sum(dim=1).unsqueeze(dim=-1)
+                    object_box_iou = (weight * object_box_iou).sum(dim=1)
 
                 # object_box_prob: P{a_{j} -> b_{i}}, shape: [i, j]
                 t1 = config.bbox_thr
@@ -293,11 +297,16 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
         # object_box_iou: IoU_{ij}^{loc}, shape: [i, j]
         object_box_iou = box_overlap_opr(gt_bboxes_, approx_pred_boxes_). \
                             reshape(len(gt_bboxes_), config.sample_num, -1)
-        object_box_iou = object_box_iou.mul(bbox_norm_prob)
         if config.multi_sampling_mode == 'max':
+            object_box_iou = object_box_iou.mul(bbox_norm_prob)
             object_box_iou = object_box_iou.max(dim=1).values
         elif config.multi_sampling_mode == 'mean':
             object_box_iou = object_box_iou.mean(dim=1)
+        elif config.multi_sampling_mode == 'meanmax':
+            object_box_iou = object_box_iou.mul(bbox_norm_prob)
+            weight = 1 / torch.clamp(1 - object_box_iou, 1e-12, None)
+            weight /= weight.sum(dim=1).unsqueeze(dim=-1)
+            object_box_iou = (weight * object_box_iou).sum(dim=1)
 
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
         num_pos += len(gt_bboxes_)
