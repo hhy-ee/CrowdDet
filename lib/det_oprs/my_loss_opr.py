@@ -247,7 +247,7 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
                     object_box_iou = object_box_iou.mean(dim=1)
                 elif config.multi_sampling_mode == 'meanmax':
                     weight = 1 / torch.clamp(1 - object_box_iou, 1e-12, None)
-                    weight /= weight.sum(dim=1).unsqueeze(dim=-1)
+                    weight /= torch.sum(weight, dim=1, keepdims=True)
                     object_box_iou = (weight * object_box_iou).sum(dim=1)
 
                 # object_box_prob: P{a_{j} -> b_{i}}, shape: [i, j]
@@ -305,7 +305,7 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
         elif config.multi_sampling_mode == 'meanmax':
             object_box_iou = object_box_iou.mul(bbox_norm_prob)
             weight = 1 / torch.clamp(1 - object_box_iou, 1e-12, None)
-            weight /= weight.sum(dim=1).unsqueeze(dim=-1)
+            weight /= torch.sum(weight, dim=1, keepdims=True)
             object_box_iou = (weight * object_box_iou).sum(dim=1)
 
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
