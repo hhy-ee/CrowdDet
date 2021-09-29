@@ -391,7 +391,7 @@ def freeanchor_vvpd_loss(anchors, cls_prob, bbox_preds, lstd_preds, gt_boxes, im
                             cls_prob_[matched], 2,
                             gt_labels_.view(-1, 1, 1).repeat(1, config.pre_anchor_topk, 1)).squeeze(2)
         # matched_box_var: P_{ij}^{std}
-        box_var_ = (-torch.mean(lstd_preds[idx], dim=1, keepdims=True)).sigmoid()
+        box_var_ = 1 - torch.mean(lstd_preds[idx], dim=1, keepdims=True).sigmoid()
         matched_box_std = torch.gather(
                             box_var_[matched], 2,
                             gt_labels_.view(-1, 1, 1).repeat(1, config.pre_anchor_topk, 1)).squeeze(2)

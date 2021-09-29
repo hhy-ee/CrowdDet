@@ -3,6 +3,7 @@ import json
 import numpy as np
 import cv2
 from scipy.stats import beta
+import matplotlib.pyplot as plt
 
 color = {'green':(0,255,0),
         'blue':(255,165,0),
@@ -20,6 +21,8 @@ color = {'green':(0,255,0),
         'white':(255,255,255)}
 
 class_names = ['background', 'person']
+plot_color = ['red', 'orange', 'yellow', 'green', 'blue']
+score_level = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
 
 def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='white'):
     width = img.shape[1]
@@ -34,6 +37,124 @@ def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='whi
             text = "{} {:.3f}".format(tags[i], scores[i])
             cv2.putText(img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color[line_color], line_thick)
     return img
+
+
+def draw_fn_boxes(img, boxes, plot_box_info, args, line_thick=1, line_color=('red','green')):
+    width = img.shape[1]
+    height = img.shape[0]
+    (supp_boxes, inf_result, gt_boxes, gt_matched) = plot_box_info
+    # plot fn & ign
+    gt_fn = gt_boxes[np.where(gt_matched == 0)[0]]
+    gt_fn_ins = gt_fn[np.where(gt_fn[:,-1]==1)[0]]
+    gt_fn_ign = gt_fn[np.where(gt_fn[:,-1]==-1)[0]]
+    plot_img = img.copy()
+    for i in range(len(gt_fn_ins)):
+        one_box = gt_fn_ins[i]
+        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
+        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[0]], line_thick)
+    for i in range(len(gt_fn_ign)):
+        one_box = gt_fn_ign[i]
+        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
+        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[1]], line_thick)
+    name = args.img_path.split('/')[-1].split('.')[-2]
+    fpath = 'outputs/{}_fn.png'.format(name)
+    cv2.imwrite(fpath, plot_img)
+    # plot gt
+    plot_img = img.copy()
+    gt = gt_boxes[np.where(gt_boxes[:,-1]==1)[0]][:,:4]
+    for i in range(len(gt)):
+        one_box = gt[i]
+        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
+        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[0]], line_thick)
+    name = args.img_path.split('/')[-1].split('.')[-2]
+    fpath = 'outputs/{}_gt.png'.format(name)
+    cv2.imwrite(fpath, plot_img)
+
+
+def draw_supp_scatter(img, boxes, plot_box_info, args, line_thick=1):
+    width = img.shape[1]
+    height = img.shape[0]
+    (supp_boxes, inf_result, gt_boxes, gt_matched) = plot_box_info
+    boxes_scr = boxes[:, 4]
+    boxes_loc = boxes[:, :4]
+    boxes_std = boxes[:, 6:8].mean(1)
+    supp_boxes_scr = [supp_box[:, 4] for supp_box in supp_boxes]
+    supp_boxes_loc = [supp_box[:, :4] for supp_box in supp_boxes]
+    supp_boxes_lstd = [supp_box[:, 6:8].mean(1) for supp_box in supp_boxes]
+
+    is_fp = np.where(np.array([re[1] for re in inf_result]) == 0)[0]
+    fp_scrs = boxes_scr[is_fp]
+    fp_lstds = boxes_std[is_fp]
+    fp_loc = boxes_loc[is_fp]
+    fp_gts = np.array([re[2] for re in inf_result])[is_fp]
+    fp_ious = np.array([re[3] for re in inf_result])[is_fp]
+    for i in range(len(score_level)-1):
+        scatter_fp = np.where((fp_scrs<=score_level[i]) * (fp_scrs>score_level[i+1]))[0]
+        for j in range(len(scatter_fp)):
+            ign = gt_boxes[fp_gts[scatter_fp[j]]][-1]
+            iou = fp_ious[scatter_fp[j]]
+            if ign == 1 and iou > 1e-2:
+                dt_idx = int(gt_matched[fp_gts[scatter_fp[j]]]) - 1
+                if supp_boxes_scr[dt_idx].shape[0] != 0 and dt_idx >= 0:
+                    supp_scr = supp_boxes_scr[dt_idx]
+                    supp_lstd = supp_boxes_lstd[dt_idx]
+                    keep_box = np.expand_dims(boxes_loc[dt_idx], axis=0)
+                    supp_iou = box_overlap_opr(keep_box, supp_boxes_loc[dt_idx], True)
+                    plt.scatter(supp_lstd, supp_scr, s=10, marker='o', c=plot_color[i])
+                    fp_scr = fp_scrs[scatter_fp[j]]
+                    fp_lstd = fp_lstds[scatter_fp[j]]
+                    fp_box = np.expand_dims(fp_loc[scatter_fp[j]], axis=0)
+                    fp_iou = box_overlap_opr(keep_box, fp_box, True)
+                    plt.scatter(fp_lstd, fp_scr, s=15, marker='^', c=plot_color[i])
+    name = args.img_path.split('/')[-1].split('.')[-2]
+    fpath = 'outputs/{}_var_scr.png'.format(name)
+    plt.savefig(fpath)
+    plt.show()
+        
+
+
+def draw_fp_boxes(img, boxes, plot_box_info, args, line_thick=1, line_color=('green','blue','red')):
+    width = img.shape[1]
+    height = img.shape[0]
+    (supp_boxes, inf_result, gt_boxes, gt_matched) = plot_box_info
+    boxes_scr = boxes[:, 4]
+    boxes_loc = boxes[:, :4]
+    boxes_lstd = boxes[:, 6:8].mean(1)
+    boxes_anchor = boxes[:, 8:12]
+
+    is_fp = np.where(np.array([re[1] for re in inf_result]) == 0)[0]
+    fp_scr = boxes_scr[is_fp]
+    fp_gt = np.array([re[2] for re in inf_result])[is_fp]
+    fp_iou = np.array([re[3] for re in inf_result])[is_fp]
+    for i in range(len(score_level)-1):
+        plot_img = img.copy()
+        plot_fp = np.where((fp_scr<=score_level[i]) * (fp_scr>score_level[i+1]))[0]
+        for j in range(len(plot_fp)):
+            one_box = boxes_loc[is_fp[plot_fp[j]]]
+            one_anchor = boxes_anchor[is_fp[plot_fp[j]]]
+            one_gt = gt_boxes[fp_gt[plot_fp[j]]]
+            one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
+            one_gt = np.array([max(one_gt[0], 0), max(one_gt[1], 0),
+                    min(one_gt[2], width - 1), min(one_gt[3], height - 1), one_gt[4]])
+            x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+            a1,b1,a2,b2 = np.array(one_anchor[:4]).astype(int)
+            m1,n1,m2,n2= np.array(one_gt[:4]).astype(int)
+            cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[0]], line_thick)
+            cv2.rectangle(plot_img, (a1,b1), (a2,b2), color[line_color[1]], line_thick)
+            if one_gt[-1] == 1 and fp_iou[plot_fp[j]] > 1e-2:
+                cv2.rectangle(plot_img, (m1,n1), (m2,n2), color[line_color[2]], line_thick)
+            text = "{:.3f} {:.3f}".format(fp_iou[plot_fp[j]], boxes_lstd[is_fp[plot_fp[j]]])
+            cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['white'], line_thick)
+        name = args.img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}_fp{:.1f}.png'.format(name, score_level[i+1])
+        cv2.imwrite(fpath, plot_img)
 
 
 def draw_supp_boxes(img, boxes, supp_boxes, args, line_thick=1, line_color=('red','green')):
@@ -64,66 +185,6 @@ def draw_supp_boxes(img, boxes, supp_boxes, args, line_thick=1, line_color=('red
             cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[1]], line_thick)
             text = "{:.3f} {:.3f}".format(supp_boxes_scr[i][high_std_idx], supp_boxes_lstd[i][high_std_idx])
             cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
-        name = args.img_path.split('/')[-1].split('.')[-2]
-        fpath = 'outputs/{}_gt{:d}.png'.format(name, i)
-        cv2.imwrite(fpath, plot_img)
-
-
-def draw_my_boxes(img, boxes, plot_box_info, args, line_thick=1, line_color=('red','green')):
-    width = img.shape[1]
-    height = img.shape[0]
-    (supp_boxes, inf_result, gt_boxes, gt_matched) = plot_box_info
-    boxes_scr = boxes[:, 4]
-    boxes_loc = boxes[:, :4]
-    boxes_lstd = boxes[:, 6:8].mean(1)
-    boxes_anchor = boxes[:, 8:12]
-    supp_boxes_scr = [supp_box[:, 4] for supp_box in supp_boxes]
-    supp_boxes_loc = [supp_box[:, :4] for supp_box in supp_boxes]
-    supp_boxes_lstd = [supp_box[:, 6:8].mean(1) for supp_box in supp_boxes]
-
-    if_tp = np.where(np.array([re[1] for re in inf_result]) == 0)[0]
-    dt_match = np.array([re[2] for re in inf_result])
-    dt_iou = np.array([re[3] for re in inf_result])
-
-    for i in range(len(if_tp)):
-        plot_img = img
-        gt_idx_for_fp = dt_match[if_tp[i]]
-        tp_dt_idx = int(gt_matched[gt_idx_for_fp] - 1)
-        # plot tp
-        one_box = boxes_loc[tp_dt_idx]
-        one_anchor = boxes_anchor[tp_dt_idx]
-        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
-                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
-        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
-        a1,b1,a2,b2 = np.array(one_anchor[:4]).astype(int)
-        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[0]], line_thick)
-        cv2.rectangle(plot_img, (a1,b1), (a2,b2), color[line_color[1]], line_thick)
-        text = "{:.3f} {:.3f}".format(dt_iou[tp_dt_idx], boxes_lstd[tp_dt_idx])
-        cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
-
-        # plot fp
-        one_box = boxes_loc[if_tp[i]]
-        one_anchor = boxes_anchor[if_tp[i]]
-        one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
-                    min(one_box[2], width - 1), min(one_box[3], height - 1)])
-        x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
-        a1,b1,a2,b2 = np.array(one_anchor[:4]).astype(int)
-        cv2.rectangle(plot_img, (x1,y1), (x2,y2), color['black'], line_thick)
-        cv2.rectangle(plot_img, (a1,b1), (a2,b2), color['blue'], line_thick)
-        text = "{:.3f} {:.3f}".format(dt_iou[if_tp[i]], boxes_lstd[if_tp[i]])
-        cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
-
-
-        # for j in range(3):
-        #     high_scr_idx = np.where(supp_boxes_scr[i] > boxes_scr[i] - (j+1)/10)[0]
-        #     high_std_idx = np.argmax(supp_boxes_lstd[i][high_scr_idx])
-        #     supp_box = supp_boxes_loc[i][high_std_idx]
-        #     supp_box = np.array([max(supp_box[0], 0), max(supp_box[1], 0),
-        #                 min(supp_box[2], width - 1), min(supp_box[3], height - 1)])
-        #     x1,y1,x2,y2 = np.array(supp_box[:4]).astype(int)
-        #     cv2.rectangle(plot_img, (x1,y1), (x2,y2), color[line_color[1]], line_thick)
-        #     text = "{:.3f} {:.3f}".format(supp_boxes_scr[i][high_std_idx], supp_boxes_lstd[i][high_std_idx])
-        #     cv2.putText(plot_img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color['black'], line_thick)
         name = args.img_path.split('/')[-1].split('.')[-2]
         fpath = 'outputs/{}_gt{:d}.png'.format(name, i)
         cv2.imwrite(fpath, plot_img)

@@ -85,7 +85,7 @@ def cpu_kl_nms(dets, base_thr):
     y2 = dets[:, 3]
     scores = dets[:, 4]
     lstd = dets[:, 6:8].mean(1)
-
+    scores = scores * (1 - lstd.sigmoid())
     areas = (x2 - x1) * (y2 - y1)
     order = np.argsort(-scores)
 
@@ -125,12 +125,12 @@ def cpu_kl_nms(dets, base_thr):
         supp_inds = np.where(ovr > base_thr)[0]
         order = order[inds + 1]
 
-        ambi_inds = np.where((ovr <= base_thr) * (ovr > base_thr - 0.1))[0]
-        ambi_order = order[ambi_inds + 1]
-        supp_order = order[supp_inds + 1]
-        if ambi_order.shape[0] != 0 and supp_order.shape[0] != 0:    
-            exsupp_idx = np.where(lstd[ambi_order] < lstd[supp_order].mean())[0]
-            order = np.where(order == ambi_order[exsupp_idx])
+        # ambi_inds = np.where((ovr <= base_thr) * (ovr > base_thr - 0.1))[0]
+        # ambi_order = order[ambi_inds + 1]
+        # supp_order = order[supp_inds + 1]
+        # if ambi_order.shape[0] != 0 and supp_order.shape[0] != 0:    
+        #     exsupp_idx = np.where(lstd[ambi_order] < lstd[supp_order].mean())[0]
+        #     order = np.where(order == ambi_order[exsupp_idx])
             
     return np.array(keep)
 
@@ -163,10 +163,10 @@ def nms_for_plot(dets, base_thr):
         ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
 
         inds = np.where(ovr <= base_thr)[0]
-        indices = np.where(ovr > base_thr)[0]
+        indices = np.where((ovr <= base_thr) * (ovr > base_thr-0.1))[0]
         supp.append(order[indices + 1])
         order = order[inds + 1]
-    return np.array(keep), supp
+    return np.array(keep), supp, 
 
 def _test():
     box1 = np.array([33,45,145,230,0.7])[None,:]

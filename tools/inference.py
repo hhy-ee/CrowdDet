@@ -38,13 +38,31 @@ def inference(args, config, network):
     pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
     pred_tags_name = np.array(config.class_names)[pred_tags]
     # inplace draw
-    if config.plot_type == 'my_plot':
-        visual_utils.draw_my_boxes(
+    if config.plot_type == 'scatter_supp':
+        visual_utils.draw_supp_scatter(
+            image,
+            pred_boxes,
+            (supp_boxes, inf_result, gt_boxes, gt_matched),
+            args,
+            line_thick=1,
+            )
+
+    if config.plot_type == 'plot_fn':
+        visual_utils.draw_fn_boxes(
             image,
             pred_boxes,
             (supp_boxes, inf_result, gt_boxes, gt_matched),
             args,
             line_thick=1, line_color=('red','green'),
+            )
+
+    elif config.plot_type == 'plot_fp':
+        visual_utils.draw_fp_boxes(
+            image,
+            pred_boxes,
+            (supp_boxes, inf_result, gt_boxes, gt_matched),
+            args,
+            line_thick=1, line_color=('green','blue','red'),
             )
 
     elif config.plot_type == 'plot_supp':

@@ -152,13 +152,13 @@ class Image(object):
                 if gtboxes[maxpos, -1] > 0:
                     gt_matched[maxpos] = 1
                     dt_matched[i] = maxpos+1
-                    scorelist.append((dt, 1, overlap_iou[i][maxpos]))
+                    scorelist.append((dt, 1, overlap_iou[i][maxpos], self.ID))
                 else:
                     dt_matched[i] = -1
             else:
                 dt_matched[i] = 0
                 maxj = overlap_iou[i].argmax()
-                scorelist.append((dt, 0, overlap_iou[i][maxj]))
+                scorelist.append((dt, 0, overlap_iou[i][maxj], self.ID))
         return scorelist
 
     def compare_caltech_union(self, thres):
