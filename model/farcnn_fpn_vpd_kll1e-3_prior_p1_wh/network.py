@@ -70,6 +70,8 @@ class RCNN(nn.Module):
             nn.init.constant_(l.bias, 0)
 
     def forward(self, fpn_fms, rcnn_rois, labels=None, bbox_targets=None):
+        if config.save_data or config.plot_type != 'normal_plot':
+            rcnn_rois, rcnn_lstds, rcnn_anchors = rcnn_rois
         # input p2-p5
         fpn_fms = fpn_fms[1:][::-1]
         stride = [4, 8, 16, 32]
@@ -110,9 +112,12 @@ class RCNN(nn.Module):
             pred_delta = pred_delta[:, 4:].reshape(-1, 4)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
-            pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
+            if config.save_data or config.plot_type != 'normal_plot':
+                pred_bbox = torch.cat([pred_bbox, pred_scores, tag, rcnn_lstds, rcnn_anchors], axis=1)
+            else:
+                pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
             return pred_bbox
-
+            
 def restore_bbox(rois, deltas, unnormalize=True):
     if unnormalize:
         std_opr = torch.tensor(config.bbox_normalize_stds[None, :]).type_as(deltas)

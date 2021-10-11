@@ -5,7 +5,7 @@ import numpy as np
 
 from config import config
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals
+from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals, find_test_top_rpn_proposals
 from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_reshape
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, kldiv_loss
 from det_oprs.my_loss_opr import freeanchor_loss
@@ -62,6 +62,7 @@ class RPN(nn.Module):
                 pred_lstd_list.append(lstd_perlvl.permute(0,2,3,1).reshape(config.train_batch_per_gpu,-1,2))
         else:
             pred_bbox_list = [pred_bbox_offsets_list[l][:, :4*config.num_cell_anchors] for l in range(list_size)]
+            pred_lstd_list = [pred_bbox_offsets_list[l][:, 4*config.num_cell_anchors:] for l in range(list_size)]
         # sample from the predictions
         rpn_rois = find_top_rpn_proposals(
                 self.training, pred_bbox_list, pred_cls_score_list,
@@ -89,5 +90,9 @@ class RPN(nn.Module):
             loss_dict['freeanchor_kldiv_loss'] = loss_kld
             return rpn_rois, loss_dict
         else:
+            if config.save_data or config.plot_type != 'normal_plot':
+                rpn_rois = find_test_top_rpn_proposals(
+                    self.training, pred_bbox_list, pred_cls_score_list, pred_lstd_list, 
+                    all_anchors_list, im_info)
             return rpn_rois
 

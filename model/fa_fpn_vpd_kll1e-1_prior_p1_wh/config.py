@@ -83,7 +83,7 @@ class Config:
     allow_low_quality = True
     save_data = False
     add_test_noise = False
-    plot_type = 'scatter_supp'
+    plot_type = 'plot_fp'
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6

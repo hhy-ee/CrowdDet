@@ -175,8 +175,10 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_2x_fpn_vpd_varlikelihood_kll1e-1_prior_p1_wh', 
-                              '--resume_weights', '21'])
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh', 
+    #                           '--resume_weights', '38'])
+    args = parser.parse_args(['--model_dir', 'farcnn_fpn_vpd_kll1e-3_prior_p1_wh', 
+                              '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

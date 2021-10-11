@@ -182,10 +182,12 @@ def run_inference():
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh',
-                                '--resume_weights', '38',
-                                '--img_path', './data/CrowdHuman/Images/273275,e99d80007220d4b6.jpg'])
-    
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh',
+    #                             '--resume_weights', '38',
+    #                             '--img_path', './data/CrowdHuman/Images/273275,ba04d000c7f2d034.jpg'])
+    args = parser.parse_args(['--model_dir', 'farcnn_fpn_vpd_kll1e-3_prior_p1_wh',
+                                '--resume_weights', '30',
+                                '--img_path', './data/CrowdHuman/Images/283554,296d10003c539b3f.jpg'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
