@@ -92,7 +92,7 @@ def box_overlap_opr(box, gt):
     )
     return iou
 
-def box_ioa_opr(box, gt):
+def box_iog_opr(box, gt):
     assert box.ndim == 2
     assert gt.ndim == 2
     area_box = (box[:, 2] - box[:, 0] + 1) * (box[:, 3] - box[:, 1] + 1)
@@ -103,12 +103,12 @@ def box_ioa_opr(box, gt):
     inter = width_height.prod(dim=2)  # [N,M]
     del width_height
     # handle empty boxes
-    ioa = torch.where(
+    iog = torch.where(
         inter > 0,
-        inter / area_box[:, None],
+        inter / area_gt[None, :],
         torch.zeros(1, dtype=inter.dtype, device=inter.device),
     )
-    return ioa
+    return iog
 
 def box_giou_opr(box, gt):
     assert box.ndim == 2
