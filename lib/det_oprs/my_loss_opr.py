@@ -92,7 +92,7 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     return losses
 
 
-def freeanchor_density_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
+def freeanchor_density_loss1(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     gt_labels, gt_bboxes = [], []
     cls_prob = cls_prob.reshape(config.train_batch_per_gpu, -1, config.num_classes-1)
     bbox_preds = bbox_preds.reshape(config.train_batch_per_gpu, -1, 4)
