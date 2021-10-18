@@ -32,11 +32,11 @@ class Network(nn.Module):
         # stride: 128,64,32,16,8, p7->p3
         fpn_fms = self.FPN(image)
         anchors_list = self.R_Anchor(fpn_fms)
-        pred_cls_list, pred_reg_list, pred_dense_list = self.R_Head(fpn_fms)
+        pred_cls_list, pred_reg_list, pred_refined_reg_list = self.R_Head(fpn_fms)
         # release the useless data
         if self.training:
             loss_dict = self.R_Criteria(
-                pred_cls_list, pred_reg_list, pred_dense_list, anchors_list, gt_boxes, im_info)
+                pred_cls_list, pred_reg_list, pred_refined_reg_list, anchors_list, gt_boxes, im_info)
             return loss_dict
         else:
             #pred_bbox = union_inference(
@@ -69,12 +69,12 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = 100 # initialize with any reasonable #fg that's not too small
         self.loss_normalizer_momentum = 0.9
 
-    def __call__(self, pred_cls_list, pred_reg_list, pred_dense_list, anchors_list, gt_boxes, im_info):
+    def __call__(self, pred_cls_list, pred_reg_list, pred_refined_reg_list, anchors_list, gt_boxes, im_info):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
-        all_pred_dense = torch.cat(pred_dense_list, axis=1).reshape(-1, 1)
+        all_refined_reg_list = torch.cat(pred_refined_reg_list, axis=1).reshape(-1, 4)
         # variational inference
         all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
         all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
@@ -84,13 +84,16 @@ class RetinaNet_Criteria(nn.Module):
 
         # get ground truth
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
-
+        refined_loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_refined_reg_list, gt_boxes, im_info)
         loss_kld = kldiv_loss(
                 all_pred_mean,
                 all_pred_lstd,
                 config.kl_weight)
         
         loss_dict['freeanchor_kldiv_loss'] = loss_kld
+        loss_dict['refined_positive_bag_loss'] = refined_loss_dict['positive_bag_loss']
+        loss_dict['refined_negative_bag_loss'] = refined_loss_dict['negative_bag_loss']
+        
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -100,7 +103,6 @@ class RetinaNet_Head(nn.Module):
         in_channels = 256
         cls_subnet = []
         bbox_subnet = []
-        dense_pred = []
         for _ in range(num_convs):
             cls_subnet.append(
                 nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
@@ -120,17 +122,17 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * 8,
             kernel_size=3, stride=1, padding=1)
         
-        # density predict
-        self.dense_pred = nn.Sequential(
-            nn.Conv2d(5, in_channels, kernel_size=3, stride=1, padding=1),
+        # refined reg predict
+        self.refined_reg_pred = nn.Sequential(
+            nn.Conv2d(8, in_channels, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(in_channels, config.num_cell_anchors * (config.num_classes-1), 
+            nn.Conv2d(in_channels, config.num_cell_anchors * 4, 
                 kernel_size=3, stride=1, padding=1),
         )
 
         # Initialization
         for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
-                        self.bbox_pred, self.dense_pred]:
+                        self.bbox_pred, self.refined_reg_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
@@ -146,11 +148,11 @@ class RetinaNet_Head(nn.Module):
         for feature in features:
             pred_cls.append(self.cls_score(self.cls_subnet(feature)))
             pred_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
-        # density prediction
-        pred_dense = []
+        # refined reg prediction
+        pred_refined_reg = []
         for (cls, reg) in zip(pred_cls, pred_reg):
-            in_density = torch.cat([cls, reg[:, 4:]], dim=1) 
-            pred_dense.append(self.dense_pred(in_density))
+            in_reg = reg
+            pred_refined_reg.append(self.refined_reg_pred(in_reg))
 
         # reshape the predictions
         assert pred_cls[0].dim() == 4
@@ -160,10 +162,10 @@ class RetinaNet_Head(nn.Module):
         pred_reg_list = [
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
             for _ in pred_reg]
-        pred_dense_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 1)
-            for _ in pred_reg]
-        return pred_cls_list, pred_reg_list, pred_dense_list
+        pred_refined_reg_list = [
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4)
+            for _ in pred_refined_reg]
+        return pred_cls_list, pred_reg_list, pred_refined_reg_list
 
 def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     keep_anchors = []

@@ -50,7 +50,7 @@ class Config:
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
-    warm_iter = 1600
+    warm_iter = 800
     max_epoch = 24
     lr_decay = [16, 22]
     nr_images_epoch = 15000
@@ -59,7 +59,7 @@ class Config:
     # ----------test config---------- #
     test_layer_topk = 1000
     test_nms = 0.5
-    test_nms_method = 'kl_nms'
+    test_nms_method = 'normal_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -89,6 +89,6 @@ class Config:
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
     kl_weight = 1e-1
-    prior_std = [0.35, 0.35]
+    prior_std = [0.125, 0.125, 0.35, 0.35]
     
 config = Config()
