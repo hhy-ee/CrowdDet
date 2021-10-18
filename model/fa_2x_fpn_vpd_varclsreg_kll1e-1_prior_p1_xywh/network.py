@@ -130,7 +130,7 @@ class RetinaNet_Head(nn.Module):
         self.refined_cls_pred = nn.Sequential(
             nn.Conv2d(5, in_channels, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(in_channels, config.num_cell_anchors * 4, 
+            nn.Conv2d(in_channels, config.num_cell_anchors * 1, 
                 kernel_size=3, stride=1, padding=1),
         )
         self.refined_reg_pred = nn.Sequential(
