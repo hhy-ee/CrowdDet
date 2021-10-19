@@ -74,7 +74,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
-        all_refined_reg_list = torch.cat(pred_refined_reg_list, axis=1).reshape(-1, 4)
+        all_pred_refined_reg = torch.cat(pred_refined_reg_list, axis=1).reshape(-1, 4)
         # variational inference
         all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
         all_pred_lstd = all_pred_reg[:, config.num_cell_anchors * 4:]
@@ -84,7 +84,7 @@ class RetinaNet_Criteria(nn.Module):
 
         # get ground truth
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
-        refined_loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_refined_reg_list, gt_boxes, im_info)
+        refined_loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_refined_reg, gt_boxes, im_info)
         loss_kld = kldiv_loss(
                 all_pred_mean,
                 all_pred_lstd,
