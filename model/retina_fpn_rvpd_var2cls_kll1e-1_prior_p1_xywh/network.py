@@ -163,8 +163,7 @@ class RetinaNet_Head(nn.Module):
         # Use prior in model initialization to improve stability
         bias_value = -(math.log((1 - prior_prob) / prior_prob))
         torch.nn.init.constant_(self.cls_score.bias, bias_value)
-        for refined_cls in self.refined_cls_pred:
-            torch.nn.init.constant_(refined_cls.bias, bias_value)
+        torch.nn.init.constant_(self.refined_cls_pred[-1].bias, bias_value)
 
     def forward(self, features):
         pred_cls = []
