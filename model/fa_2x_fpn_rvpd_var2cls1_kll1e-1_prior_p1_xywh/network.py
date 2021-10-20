@@ -74,7 +74,6 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_refined_cls = torch.cat(pred_refined_cls_list, axis=1).reshape(-1, config.num_classes-1)
-        all_pred_refined_cls = torch.sigmoid(all_pred_refined_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # variational inference
         all_pred_mean = all_pred_reg[:, :config.num_cell_anchors * 4]
@@ -122,10 +121,12 @@ class RetinaNet_Head(nn.Module):
         self.bbox_pred = nn.Conv2d(
             in_channels, config.num_cell_anchors * 8,
             kernel_size=3, stride=1, padding=1)
-        
+        self.weight_pred = nn.Conv2d(
+            in_channels, config.num_cell_anchors * 1,
+            kernel_size=3, stride=1, padding=1)
         # refined reg predict
-        self.refined_cls_pred = nn.Sequential(
-            nn.Conv2d(5, in_channels, kernel_size=3, stride=1, padding=1),
+        self.varcls_pred = nn.Sequential(
+            nn.Conv2d(4, in_channels, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(in_channels, config.num_cell_anchors * 1, 
                 kernel_size=3, stride=1, padding=1),
@@ -133,7 +134,7 @@ class RetinaNet_Head(nn.Module):
 
         # Initialization
         for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
-                        self.bbox_pred, self.refined_cls_pred]:
+                        self.bbox_pred, self.weight_pred, self.varcls_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
@@ -142,18 +143,23 @@ class RetinaNet_Head(nn.Module):
         # Use prior in model initialization to improve stability
         bias_value = -(math.log((1 - prior_prob) / prior_prob))
         torch.nn.init.constant_(self.cls_score.bias, bias_value)
+        torch.nn.init.constant_(self.refined_cls_pred[-1].bias, bias_value)
 
     def forward(self, features):
         pred_cls = []
         pred_reg = []
+        pred_wgh = []
         for feature in features:
             pred_cls.append(self.cls_score(self.cls_subnet(feature)))
             pred_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+            pred_wgh.append(self.weight_pred(self.bbox_subnet(feature)))
         # refined reg prediction
         pred_refined_cls = []
-        for (cls, reg) in zip(pred_cls, pred_reg):
-            in_cls = torch.cat([cls, reg[:, 4:]], dim=1) 
-            pred_refined_cls.append(self.refined_cls_pred(in_cls))
+        for (cls, reg, wgh) in zip(pred_cls, pred_reg, pred_wgh):
+            var_cls = self.varcls_pred(reg[:, 4:])
+            weight = torch.sigmoid(wgh)
+            refined_cls = weight * torch.sigmoid(var_cls) + (1-weight) * torch.sigmoid(cls)
+            pred_refined_cls.append(refined_cls)
 
         # reshape the predictions
         assert pred_cls[0].dim() == 4
@@ -184,7 +190,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
             inds = inds.flatten()
             keep_anchors.append(anchors[inds])
-            keep_cls.append(torch.sigmoid(pred_cls[inds]))
+            keep_cls.append(pred_cls[inds])
             keep_reg.append(pred_reg[inds])
             keep_lstd.append(pred_lstd[inds])
         else:
