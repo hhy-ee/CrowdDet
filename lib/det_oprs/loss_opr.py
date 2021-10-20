@@ -17,6 +17,61 @@ def softmax_loss(score, label, ignore_label=-1):
     loss = loss * mask
     return loss
 
+def refined_softmax_loss(score, var_score, weight, label, ignore_label=-1):
+    with torch.no_grad():
+        max_score = score.max(axis=1, keepdims=True)[0]
+        max_var_score = var_score.max(axis=1, keepdims=True)[0]
+    score -= max_score
+    var_score -= max_var_score
+
+    log_prob = score - torch.log(torch.exp(score).sum(axis=1, keepdims=True))
+    var_log_prob = var_score - torch.log(torch.exp(var_score).sum(axis=1, keepdims=True))
+    weight = torch.sigmoid(weight)[:,1:]
+
+    refined_prob = weight * log_prob.exp()[:,1:] + (1-weight) * var_log_prob.exp()[:,1:]
+    refined_log_prob = torch.log(torch.cat([1-refined_prob, refined_prob], dim=1))
+    # one-hot label
+    mask = label != ignore_label
+    vlabel = label * mask
+    onehot = torch.zeros(vlabel.shape[0], config.num_classes, device=score.device)
+    onehot.scatter_(1, vlabel.reshape(-1, 1), 1)
+    # origin loss
+    loss = -(log_prob * onehot).sum(axis=1)
+    loss = loss * mask
+    # refined loss
+    refined_loss = -(refined_log_prob * onehot).sum(axis=1)
+    refined_loss = refined_loss * mask
+    return loss, refined_loss 
+
+def refined_var_softmax_loss(score, var_score, weight, label, ignore_label=-1):
+    with torch.no_grad():
+        max_score = score.max(axis=1, keepdims=True)[0]
+        max_var_score = var_score.max(axis=1, keepdims=True)[0]
+    score -= max_score
+    var_score -= max_var_score
+
+    log_prob = score - torch.log(torch.exp(score).sum(axis=1, keepdims=True))
+    var_log_prob = var_score - torch.log(torch.exp(var_score).sum(axis=1, keepdims=True))
+    weight = torch.sigmoid(weight)[:,1:]
+
+    refined_prob = weight * log_prob.exp()[:,1:] + (1-weight) * var_log_prob.exp()[:,1:]
+    refined_log_prob = torch.log(torch.cat([1-refined_prob, refined_prob], dim=1))
+    # one-hot label
+    mask = label != ignore_label
+    vlabel = label * mask
+    onehot = torch.zeros(vlabel.shape[0], config.num_classes, device=score.device)
+    onehot.scatter_(1, vlabel.reshape(-1, 1), 1)
+    # origin loss
+    loss = -(log_prob * onehot).sum(axis=1)
+    loss = loss * mask
+    # var loss
+    var_loss = -(var_log_prob * onehot).sum(axis=1)
+    var_loss = var_loss * mask
+    # refined loss
+    refined_loss = -(refined_log_prob * onehot).sum(axis=1)
+    refined_loss = refined_loss * mask
+    return loss, var_loss, refined_loss 
+
 def smooth_l1_loss(pred, target, beta: float):
     if beta < 1e-5:
         loss = torch.abs(input - target)
