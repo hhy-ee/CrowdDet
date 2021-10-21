@@ -46,11 +46,11 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 3.125e-4
+    base_lr = 3.125e-4 * 2
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
-    warm_iter = 800
+    warm_iter = 1600
     max_epoch = 24
     lr_decay = [16, 22]
     nr_images_epoch = 15000
