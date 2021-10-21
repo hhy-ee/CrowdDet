@@ -22,7 +22,7 @@ class Network(nn.Module):
         self.RCNN = RCNN()
         assert config.num_classes == 2, 'Only support two class(1fg/1bg).'
 
-    def forward(self, image, im_info, gt_boxes=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None):
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
         image = get_padded_tensor(image, 64)
