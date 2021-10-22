@@ -141,10 +141,15 @@ class RCNN(nn.Module):
             loss_dict['loss_rcnn_kld'] = loss_rcnn_kld
             return loss_dict
         else:
-            class_num = pred_refined_cls.shape[-1] - 1
-            tag = torch.arange(class_num).type_as(pred_refined_cls)+1
-            tag = tag.repeat(pred_refined_cls.shape[0], 1).reshape(-1,1)
-            pred_scores = F.softmax(pred_refined_cls, dim=-1)[:, 1:].reshape(-1, 1)
+            class_num = pred_cls.shape[-1] - 1
+            tag = torch.arange(class_num).type_as(pred_cls)+1
+            tag = tag.repeat(pred_cls.shape[0], 1).reshape(-1,1)
+            # score refinement
+            pred_scores = F.softmax(pred_cls, dim=-1)[:, 1:].reshape(-1, 1)
+            pred_var_scores = F.softmax(pred_var_cls, dim=-1)[:, 1:].reshape(-1, 1)
+            pred_weight = torch.sigmoid(pred_weight)[:, 1:].reshape(-1, 1)
+            pred_scores = pred_weight * pred_scores + (1-pred_weight) * pred_var_scores
+            #
             pred_delta = pred_delta[:, 8:].reshape(-1, 8)[:, :4]
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
