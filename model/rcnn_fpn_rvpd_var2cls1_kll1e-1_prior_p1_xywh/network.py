@@ -62,9 +62,12 @@ class RCNN(nn.Module):
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
         self.pred_delta = nn.Linear(1024, config.num_classes * 8)
-        self.pred_weight = nn.Linear(1024, config.num_classes)
-        self.pred_refined_cls = nn.Sequential(
+        self.pred_var_cls = nn.Sequential(
             nn.Linear(8, 256),
+            nn.Linear(256, 256),
+            nn.Linear(256, config.num_classes))
+        self.pred_refined_cls = nn.Sequential(
+            nn.Linear(10, 256),
             nn.Linear(256, 256),
             nn.Linear(256, config.num_classes))
 
@@ -74,7 +77,7 @@ class RCNN(nn.Module):
         for l in [self.pred_delta]:
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
-        for l in [self.pred_weight]:
+        for l in self.pred_var_cls:
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
         for l in self.pred_refined_cls:
@@ -91,10 +94,12 @@ class RCNN(nn.Module):
         flatten_feature = F.relu_(self.fc2(flatten_feature))
         pred_cls = self.pred_cls(flatten_feature)
         pred_delta = self.pred_delta(flatten_feature)
-        pred_weight = self.pred_weight(flatten_feature)
         pred_lstd = pred_delta.reshape(-1, config.num_classes, 8)[:,:,4:]
-        in_cls = pred_lstd.reshape(-1, 8)
-        pred_refined_cls = self.pred_refined_cls(in_cls)
+        # var_cls & refined cls 
+        in_cls1 = pred_lstd.reshape(-1, 8)
+        pred_var_cls = self.pred_var_cls(in_cls1)
+        in_cls2 = torch.cat([pred_cls.unsqueeze(-1), pred_lstd], dim=2).reshape(-1, 10)
+        pred_refined_cls = self.pred_refined_cls(in_cls2)
 
         if self.training:
             # loss for regression
@@ -123,18 +128,22 @@ class RCNN(nn.Module):
                 pred_lstd,
                 config.kl_weight)
             # loss for classification
-            objectness_loss, refined_objectness_loss = refined_softmax_loss(
-                pred_cls, pred_refined_cls, pred_weight, labels)
+            objectness_loss = softmax_loss(pred_cls, labels)
             objectness_loss = objectness_loss * valid_masks
+            var_objectness_loss = softmax_loss(pred_var_cls, labels)
+            var_objectness_loss = var_objectness_loss * valid_masks
+            refined_objectness_loss = softmax_loss(pred_refined_cls, labels)
             refined_objectness_loss = refined_objectness_loss * valid_masks
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer
             loss_rcnn_cls = objectness_loss.sum() * normalizer
+            loss_rcnn_var_cls = var_objectness_loss.sum() * normalizer
             loss_rcnn_refined_cls = refined_objectness_loss.sum() * normalizer
             loss_rcnn_kld = kldivergence_loss.sum() * normalizer
             loss_dict = {}
             loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
             loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
+            loss_dict['loss_rcnn_var_cls'] = loss_rcnn_var_cls
             loss_dict['loss_rcnn_refined_cls'] = loss_rcnn_refined_cls
             loss_dict['loss_rcnn_kld'] = loss_rcnn_kld
             return loss_dict
