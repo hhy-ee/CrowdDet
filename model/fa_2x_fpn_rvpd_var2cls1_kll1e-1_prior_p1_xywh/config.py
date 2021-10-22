@@ -46,13 +46,13 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 3.125e-4
+    base_lr = 3.125e-4 * 2
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
     warm_iter = 1600
-    max_epoch = 30
-    lr_decay = [33, 43]
+    max_epoch = 24
+    lr_decay = [16, 22]
     nr_images_epoch = 15000
     log_dump_interval = 20
 
@@ -80,11 +80,15 @@ class Config:
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
-
-    # ----------freeanchor config---------- #
-    kl_weight = 1e-1
-    prior_std = [0.125, 0.125, 0.35, 0.35]
     save_data = False
     add_test_noise = False
+
+    # ----------freeanchor config---------- #
+    bbox_thr = 0.6
+    pre_anchor_topk = 50
+    loss_box_alpha = 0.5
+    loss_box_gamma = 2.0
+    kl_weight = 1e-1
+    prior_std = [0.125, 0.125, 0.35, 0.35]
     
 config = Config()
