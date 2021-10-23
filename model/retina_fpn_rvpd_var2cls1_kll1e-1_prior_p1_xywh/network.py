@@ -42,7 +42,7 @@ class Network(nn.Module):
             #pred_bbox = union_inference(
             #        anchors_list, pred_cls_list, pred_reg_list, im_info)
             pred_bbox = per_layer_inference(
-                    anchors_list, pred_refined_cls_list, pred_reg_list, im_info)
+                    anchors_list, pred_cls_list, pred_reg_list, im_info)
             return pred_bbox.cpu().detach()
 
 class RetinaNet_Anchor():
@@ -123,9 +123,9 @@ class RetinaNet_Criteria(nn.Module):
         loss_var_cls = loss_var_cls.sum() / self.loss_normalizer
         loss_refined_cls = loss_refined_cls.sum() / self.loss_normalizer
         loss_dict = {}
-        loss_dict['retina_focal_loss'] = loss_cls / 3
-        loss_dict['retina_var_focal_loss'] = loss_var_cls / 3
-        loss_dict['retina_refined_focal_loss'] = loss_refined_cls / 3
+        loss_dict['retina_focal_loss'] = loss_cls / 2
+        # loss_dict['retina_var_focal_loss'] = loss_var_cls / 2
+        loss_dict['retina_refined_focal_loss'] = loss_refined_cls / 2
         loss_dict['retina_smooth_l1'] = loss_reg
         loss_dict['retina_kldiv_loss'] = loss_kld
         return loss_dict

@@ -43,7 +43,7 @@ class Network(nn.Module):
             #pred_bbox = union_inference(
             #        anchors_list, pred_cls_list, pred_reg_list, im_info)
             pred_bbox = per_layer_inference(
-                    anchors_list, pred_refined_cls_list, pred_reg_list, im_info)
+                    anchors_list, pred_cls_list, pred_reg_list, im_info)
             return pred_bbox.cpu().detach()
 
 class RetinaNet_Anchor():
@@ -96,12 +96,12 @@ class RetinaNet_Criteria(nn.Module):
                 all_pred_lstd,
                 config.kl_weight)
         loss_dict['freeanchor_kldiv_loss'] = loss_kld
-        loss_dict['positive_bag_loss'] = loss_dict['positive_bag_loss'] / 3
-        loss_dict['negative_bag_loss'] = loss_dict['negative_bag_loss'] / 3
-        loss_dict['var_positive_bag_loss'] = var_loss_dict['positive_bag_loss'] / 3
-        loss_dict['var_negative_bag_loss'] = var_loss_dict['negative_bag_loss'] / 3
-        loss_dict['refined_positive_bag_loss'] = refined_loss_dict['positive_bag_loss'] / 3
-        loss_dict['refined_negative_bag_loss'] = refined_loss_dict['negative_bag_loss'] / 3
+        loss_dict['positive_bag_loss'] = loss_dict['positive_bag_loss'] / 2
+        loss_dict['negative_bag_loss'] = loss_dict['negative_bag_loss'] / 2
+        # loss_dict['var_positive_bag_loss'] = var_loss_dict['positive_bag_loss'] / 3
+        # loss_dict['var_negative_bag_loss'] = var_loss_dict['negative_bag_loss'] / 3
+        loss_dict['refined_positive_bag_loss'] = refined_loss_dict['positive_bag_loss'] / 2
+        loss_dict['refined_negative_bag_loss'] = refined_loss_dict['negative_bag_loss'] / 2
         
         return loss_dict
 
