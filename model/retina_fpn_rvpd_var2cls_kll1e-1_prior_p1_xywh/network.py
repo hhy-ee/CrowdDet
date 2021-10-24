@@ -112,8 +112,8 @@ class RetinaNet_Criteria(nn.Module):
         loss_cls = loss_cls.sum() / self.loss_normalizer
         loss_refined_cls = loss_refined_cls.sum() / self.loss_normalizer
         loss_dict = {}
-        loss_dict['retina_focal_loss'] = loss_cls
-        loss_dict['retina_refined_focal_loss'] = loss_refined_cls
+        loss_dict['retina_focal_loss'] = loss_cls / 2
+        loss_dict['retina_refined_focal_loss'] = loss_refined_cls / 2
         loss_dict['retina_smooth_l1'] = loss_reg
         loss_dict['retina_kldiv_loss'] = loss_kld
         return loss_dict
