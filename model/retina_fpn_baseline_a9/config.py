@@ -46,13 +46,13 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 3.125e-4
+    base_lr = 3.125e-4 * 2
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
     warm_iter = 800
     max_epoch = 30
-    lr_decay = [33, 43]
+    lr_decay = [24, 27]
     nr_images_epoch = 15000
     log_dump_interval = 20
 
@@ -71,8 +71,6 @@ class Config:
     anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
     anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
     anchor_aspect_ratios = [1, 2, 3]
-    # anchor_base_scale = [2**0]
-    # anchor_aspect_ratios = [1]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
@@ -80,5 +78,6 @@ class Config:
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
+    save_data = False
 
 config = Config()
