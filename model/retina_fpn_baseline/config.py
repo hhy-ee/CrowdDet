@@ -52,7 +52,7 @@ class Config:
 
     warm_iter = 800
     max_epoch = 30
-    lr_decay = [33, 43]
+    lr_decay = [24, 27]
     nr_images_epoch = 15000
     log_dump_interval = 20
 
@@ -72,7 +72,7 @@ class Config:
     # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
     # anchor_aspect_ratios = [1, 2, 3]
     anchor_base_scale = [2**0]
-    anchor_aspect_ratios = [1]
+    anchor_aspect_ratios = [2]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #

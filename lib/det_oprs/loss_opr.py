@@ -7,7 +7,7 @@ from config import config
 def softmax_loss(score, label, ignore_label=-1):
     with torch.no_grad():
         max_score = score.max(axis=1, keepdims=True)[0]
-    score -= max_score
+    score = score - max_score
     log_prob = score - torch.log(torch.exp(score).sum(axis=1, keepdims=True))
     mask = label != ignore_label
     vlabel = label * mask
