@@ -11,7 +11,6 @@ from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss
-from det_oprs.my_loss_opr import freeanchor_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -88,18 +87,46 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_reg = all_pred_mean + pred_scale_std * torch.randn_like(all_pred_lstd)
 
         # get ground truth
-        loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
-        ref_loss_dict = freeanchor_loss(all_anchors, all_pred_ref_cls, all_pred_ref_reg, gt_boxes, im_info)
+        labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
+        # regression loss
+        fg_mask = (labels > 0).flatten()
+        valid_mask = (labels >= 0).flatten()
+        loss_reg = smooth_l1_loss(
+                all_pred_ref_reg[fg_mask],
+                bbox_target[fg_mask],
+                config.smooth_l1_beta)
+        loss_ref_reg = smooth_l1_loss(
+                all_pred_reg[fg_mask],
+                bbox_target[fg_mask],
+                config.smooth_l1_beta)
+        loss_cls = focal_loss(
+                all_pred_cls[valid_mask],
+                labels[valid_mask],
+                config.focal_loss_alpha,
+                config.focal_loss_gamma)
+        loss_ref_cls = focal_loss(
+                all_pred_ref_cls[valid_mask],
+                labels[valid_mask],
+                config.focal_loss_alpha,
+                config.focal_loss_gamma)
         loss_kld = kldiv_loss(
                 all_pred_mean,
                 all_pred_lstd,
                 config.kl_weight)
-        
-        loss_dict['freeanchor_kldiv_loss'] = loss_kld
-        loss_dict['positive_bag_loss'] = loss_dict['positive_bag_loss'] / 2
-        loss_dict['negative_bag_loss'] = loss_dict['negative_bag_loss'] / 2
-        loss_dict['ref_positive_bag_loss'] = ref_loss_dict['positive_bag_loss'] / 2
-        loss_dict['ref_negative_bag_loss'] = ref_loss_dict['negative_bag_loss'] / 2
+        num_pos_anchors = fg_mask.sum().item()
+        self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
+            1 - self.loss_normalizer_momentum
+            ) * max(num_pos_anchors, 1)
+        loss_reg = loss_reg.sum() / self.loss_normalizer
+        loss_ref_reg = loss_ref_reg.sum() / self.loss_normalizer
+        loss_cls = loss_cls.sum() / self.loss_normalizer
+        loss_ref_cls = loss_ref_cls.sum() / self.loss_normalizer
+        loss_dict = {}
+        loss_dict['retina_focal_loss'] = loss_cls
+        loss_dict['retina_ref_focal_loss'] = loss_ref_cls
+        loss_dict['retina_smooth_l1'] = loss_reg
+        loss_dict['retina_ref_smooth_l1'] = loss_ref_reg
+        loss_dict['retina_kldiv_loss'] = loss_kld
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -107,7 +134,7 @@ class RetinaNet_Head(nn.Module):
         super().__init__()
         num_convs = 4
         in_channels = 256
-        in_ref_channel = 261
+        in_ref_channel = 265
         cls_subnet = []
         bbox_subnet = []
         refine_subset = []
@@ -170,7 +197,7 @@ class RetinaNet_Head(nn.Module):
             pred_cls.append(self.cls_score(cls_feature))
             pred_reg.append(self.bbox_pred(reg_featrue))
             # refine feature
-            boxes_feature = torch.cat((self.bbox_pred(reg_featrue)[:,:4],
+            boxes_feature = torch.cat((self.bbox_pred(reg_featrue),
                 self.cls_score(cls_feature)), dim=1)
             boxes_feature = torch.cat((feature, boxes_feature), dim=1)
             refine_feature = F.relu_(self.refine_subset(boxes_feature))
