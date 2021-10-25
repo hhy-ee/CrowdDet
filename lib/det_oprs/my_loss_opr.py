@@ -69,7 +69,7 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
         pred_boxes = bbox_transform_inv_opr(anchors, bbox_preds_)
         object_box_iou = box_overlap_opr(gt_bboxes_, pred_boxes)
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
-        num_pos += len(gt_bboxes_)
+        num_pos = num_pos + len(gt_bboxes_)
         positive_losses.append(positive_bag_loss(matched_cls_prob, matched_box_prob))
     positive_loss = torch.cat(positive_losses).sum() / max(1, num_pos)
 
@@ -187,7 +187,7 @@ def freeanchor_svpd_loss(anchors, cls_prob, bbox_preds, pred_stds, gt_boxes, im_
                             unsqueeze(dim=-1))*object_box_iou).sum(dim=1).reshape(len(gt_bboxes_),-1)
 
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
-        num_pos += len(gt_bboxes_)
+        num_pos = num_pos + len(gt_bboxes_)
         positive_losses.append(positive_bag_loss(matched_cls_prob, matched_box_prob))
     positive_loss = torch.cat(positive_losses).sum() / max(1, num_pos)
 
@@ -311,7 +311,7 @@ def freeanchor_avpd_loss(anchors, approx_samples, cls_prob, bbox_preds, std_pred
             object_box_iou = (weight * object_box_iou).sum(dim=1)
 
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
-        num_pos += len(gt_bboxes_)
+        num_pos = num_pos + len(gt_bboxes_)
         positive_losses.append(positive_bag_loss(matched_cls_prob, matched_box_prob))
     positive_loss = torch.cat(positive_losses).sum() / max(1, num_pos)
 
@@ -338,7 +338,7 @@ def positive_bag_loss(matched_cls_prob, matched_box_prob):
     # bag_prob = Mean-max(matched_prob)
     matched_prob = matched_cls_prob * matched_box_prob
     weight = 1 / torch.clamp(1 - matched_prob, 1e-12, None)
-    weight /= weight.sum(dim=1).unsqueeze(dim=-1)
+    weight = weight / weight.sum(dim=1).unsqueeze(dim=-1)
     bag_prob = (weight * matched_prob).sum(dim=1)
     # positive_bag_loss = -self.alpha * log(bag_prob)
     return config.loss_box_alpha * F.binary_cross_entropy(bag_prob, \
