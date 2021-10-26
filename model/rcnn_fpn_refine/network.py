@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, rcnn_kldiv_loss
+from det_oprs.loss_opr import refine_loss_softmax
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -55,21 +55,20 @@ class RCNN(nn.Module):
         # roi head
         self.fc1 = nn.Linear(256*7*7, 1024)
         self.fc2 = nn.Linear(1024, 1024)
-        self.fc3 = nn.Linear(1060, 1024)
+        self.fc3 = nn.Linear(1044, 1024)
 
         for l in [self.fc1, self.fc2, self.fc3]:
             nn.init.kaiming_uniform_(l.weight, a=1)
             nn.init.constant_(l.bias, 0)
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
-        self.pred_delta = nn.Linear(1024, config.num_classes * 8)
-        self.ref_pred_cls = nn.Linear(1024, config.num_classes)
-        self.ref_pred_delta = nn.Linear(1024, config.num_classes * 8)
-
-        for l in [self.pred_cls, self.ref_pred_cls]:
+        self.pred_delta = nn.Linear(1024, config.num_classes * 4)
+        self.pred_ref_cls = nn.Linear(1024, config.num_classes)
+        self.pred_ref_delta = nn.Linear(1024, config.num_classes * 4)
+        for l in [self.pred_cls, self.pred_ref_cls]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
-        for l in [self.pred_delta, self.ref_pred_delta]:
+        for l in [self.pred_delta, self.pred_ref_delta]:
             nn.init.normal_(l.weight, std=0.001)
             nn.init.constant_(l.bias, 0)
 
@@ -84,74 +83,33 @@ class RCNN(nn.Module):
         pred_cls = self.pred_cls(flatten_feature)
         pred_delta = self.pred_delta(flatten_feature)
         pred_scores = F.softmax(pred_cls, dim=-1)
-        pred_lstd = pred_delta.reshape(-1, config.num_classes, 8)[:,1]
-
-        # refine feature
-        boxes_feature = torch.cat((pred_lstd,
+        # cons refine feature
+        boxes_feature = torch.cat((pred_delta[:, 4:],
             pred_scores[:, 1][:, None]), dim=1).repeat(1, 4)
         boxes_feature = torch.cat((flatten_feature, boxes_feature), dim=1)
         refine_feature = F.relu_(self.fc3(boxes_feature))
-        pred_ref_cls = self.ref_pred_cls(refine_feature)
-        pred_ref_delta = self.ref_pred_delta(refine_feature)
-
+        # refine
+        pred_ref_cls = self.pred_ref_cls(refine_feature)
+        pred_ref_delta = self.pred_ref_delta(refine_feature)
         if self.training:
-            # loss for regression
-            labels = labels.long().flatten()
-            fg_masks = labels > 0
-            valid_masks = labels >= 0
-            # multi class
-            pred_delta = pred_delta.reshape(-1, config.num_classes, 8)
-            pred_ref_delta = pred_ref_delta.reshape(-1, config.num_classes, 8)
-            # variational inference
-            pred_mean = pred_delta[:, :, :4]
-            pred_lstd = pred_delta[:, :, 4:]
-            pred_delta = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
-            pred_ref_delta = pred_ref_delta[:, :, :4]
-            # compute loss
-            fg_gt_classes = labels[fg_masks]
-            pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
-            pred_ref_delta = pred_ref_delta[fg_masks, fg_gt_classes, :]
-            vl_gt_classes = labels[valid_masks]
-            pred_mean = pred_mean[valid_masks, vl_gt_classes, :]
-            pred_lstd = pred_lstd[valid_masks, vl_gt_classes, :]
-            
-            localization_loss = smooth_l1_loss(
-                pred_delta,
-                bbox_targets[fg_masks],
-                config.rcnn_smooth_l1_beta)
-            localization_ref_loss = smooth_l1_loss(
-                pred_ref_delta,
-                bbox_targets[fg_masks],
-                config.rcnn_smooth_l1_beta)
-            kldivergence_loss = rcnn_kldiv_loss(
-                pred_mean,
-                pred_lstd,
-                config.kl_weight)
-            # loss for classification
-            objectness_loss = softmax_loss(pred_cls, labels)
-            objectness_loss = objectness_loss * valid_masks
-            objectness_ref_loss = softmax_loss(pred_ref_cls, labels)
-            objectness_ref_loss = objectness_ref_loss * valid_masks
-            normalizer = 1.0 / valid_masks.sum().item()
-            loss_rcnn_loc = localization_loss.sum() * normalizer
-            loss_rcnn_ref_loc = localization_ref_loss.sum() * normalizer
-            loss_rcnn_cls = objectness_loss.sum() * normalizer
-            loss_rcnn_ref_cls = objectness_ref_loss.sum() * normalizer
-            loss_rcnn_kld = kldivergence_loss.sum() * normalizer
+            loss_rcnn = refine_loss_softmax(
+                        pred_delta, pred_cls,
+                        bbox_targets, labels)
+            loss_ref = refine_loss_softmax(
+                        pred_ref_delta, pred_ref_cls,
+                        bbox_targets, labels)
+            loss_rcnn = loss_rcnn.mean()
+            loss_ref = loss_ref.mean()
             loss_dict = {}
-            loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
-            loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
-            loss_dict['loss_rcnn_ref_loc'] = loss_rcnn_ref_loc
-            loss_dict['loss_rcnn_ref_cls'] = loss_rcnn_ref_cls
-            loss_dict['loss_rcnn_kld'] = loss_rcnn_kld
+            loss_dict['loss_rcnn'] = loss_rcnn
+            loss_dict['loss_ref'] = loss_ref
             return loss_dict
         else:
-            class_num = pred_ref_cls.shape[-1] - 1
-            tag = torch.arange(class_num).type_as(pred_ref_cls)+1
-            tag = tag.repeat(pred_ref_cls.shape[0], 1).reshape(-1,1)
-            # score refinement
-            pred_scores = F.softmax(pred_ref_cls, dim=-1)[:, 1:].reshape(-1, 1)
-            pred_delta = pred_ref_delta[:, 8:].reshape(-1, 8)[:, :4]
+            class_num = pred_cls.shape[-1] - 1
+            tag = torch.arange(class_num).type_as(pred_cls)+1
+            tag = tag.repeat(pred_cls.shape[0], 1).reshape(-1,1)
+            pred_scores = F.softmax(pred_cls, dim=-1)[:, 1:].reshape(-1, 1)
+            pred_delta = pred_delta[:, 4:].reshape(-1, 4)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
             pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)

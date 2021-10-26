@@ -106,7 +106,10 @@ class RCNN(nn.Module):
             pred_mean = pred_delta[:, :, :4]
             pred_lstd = pred_delta[:, :, 4:]
             pred_delta = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
-            pred_ref_delta = pred_ref_delta[:, :, :4]
+            pred_ref_mean = pred_ref_delta[:, :, :4]
+            pred_ref_lstd = pred_ref_delta[:, :, 4:]
+            pred_ref_delta = pred_ref_mean + pred_ref_lstd.exp() * torch.randn_like(pred_ref_mean)
+
             # compute loss
             fg_gt_classes = labels[fg_masks]
             pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
