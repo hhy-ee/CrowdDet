@@ -171,7 +171,7 @@ class RetinaNet_Head(nn.Module):
             boxes_feature = torch.cat((self.bbox_pred(reg_featrue),
                 self.cls_score(cls_feature)), dim=1)
             boxes_feature = torch.cat((feature, boxes_feature), dim=1)
-            refine_feature = F.relu_(self.refine_subset(boxes_feature))
+            refine_feature = self.refine_subset(boxes_feature)
             pred_ref_cls.append(self.ref_cls_score(refine_feature))
             pred_ref_reg.append(self.ref_bbox_pred(refine_feature))
 
