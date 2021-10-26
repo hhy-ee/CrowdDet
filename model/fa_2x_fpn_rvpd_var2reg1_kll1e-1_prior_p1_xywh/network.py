@@ -96,10 +96,8 @@ class RetinaNet_Criteria(nn.Module):
                 config.kl_weight)
         
         loss_dict['freeanchor_kldiv_loss'] = loss_kld
-        loss_dict['positive_bag_loss'] = loss_dict['positive_bag_loss'] / 2
-        loss_dict['negative_bag_loss'] = loss_dict['negative_bag_loss'] / 2
-        loss_dict['ref_positive_bag_loss'] = ref_loss_dict['positive_bag_loss'] / 2
-        loss_dict['ref_negative_bag_loss'] = ref_loss_dict['negative_bag_loss'] / 2
+        loss_dict['ref_positive_bag_loss'] = ref_loss_dict['positive_bag_loss']
+        loss_dict['ref_negative_bag_loss'] = ref_loss_dict['negative_bag_loss']
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -165,15 +163,14 @@ class RetinaNet_Head(nn.Module):
         pred_ref_cls = []
         pred_ref_reg = []
         for feature in features:
-            cls_feature = self.cls_subnet(feature)
-            reg_featrue = self.bbox_subnet(feature)
-            pred_cls.append(self.cls_score(cls_feature))
-            pred_reg.append(self.bbox_pred(reg_featrue))
+            cls = self.cls_score(self.cls_subnet(feature))
+            reg = self.bbox_pred(self.bbox_subnet(feature))
+            pred_cls.append(cls)
+            pred_reg.append(reg)
             # refine feature
-            boxes_feature = torch.cat((self.bbox_pred(reg_featrue)[:,:4],
-                self.cls_score(cls_feature)), dim=1)
+            boxes_feature = torch.cat((cls, reg[:, :4]), dim=1)
             boxes_feature = torch.cat((feature, boxes_feature), dim=1)
-            refine_feature = F.relu_(self.refine_subset(boxes_feature))
+            refine_feature = self.refine_subset(boxes_feature)
             pred_ref_cls.append(self.ref_cls_score(refine_feature))
             pred_ref_reg.append(self.ref_bbox_pred(refine_feature))
 
