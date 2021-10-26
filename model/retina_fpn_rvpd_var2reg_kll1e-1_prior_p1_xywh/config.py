@@ -52,7 +52,7 @@ class Config:
 
     warm_iter = 1600
     max_epoch = 30
-    lr_decay = [33, 43]
+    lr_decay = [24, 27]
     nr_images_epoch = 15000
     log_dump_interval = 20
 
