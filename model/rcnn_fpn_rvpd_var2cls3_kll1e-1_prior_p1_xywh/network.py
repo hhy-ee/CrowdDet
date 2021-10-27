@@ -141,7 +141,7 @@ class RCNN(nn.Module):
             tag = tag.repeat(pred_ref_cls.shape[0], 1).reshape(-1,1)
             # score refinement
             pred_scores = F.softmax(pred_ref_cls, dim=-1)[:, 1:].reshape(-1, 1)
-            pred_delta = pred_ref_delta[:, 8:].reshape(-1, 8)[:, :4]
+            pred_delta = pred_delta[:, 8:].reshape(-1, 8)[:, :4]
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
             pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
