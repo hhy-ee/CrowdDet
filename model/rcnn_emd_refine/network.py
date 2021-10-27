@@ -138,6 +138,7 @@ class RCNN(nn.Module):
             loss_dict['loss_ref_emd'] = loss_ref
             return loss_dict
         else:
+            # refined
             class_num = pred_ref_cls_0.shape[-1] - 1
             tag = torch.arange(class_num).type_as(pred_ref_cls_0)+1
             tag = tag.repeat(pred_ref_cls_0.shape[0], 1).reshape(-1,1)
