@@ -129,6 +129,7 @@ class RetinaNet_Head(nn.Module):
         in_ref_channel = 261
         cls_subnet = []
         bbox_subnet = []
+        refine_subset = []
         for _ in range(num_convs):
             cls_subnet.append(
                 nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
