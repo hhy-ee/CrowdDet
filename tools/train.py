@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import sys
 import argparse
 import torch
@@ -173,7 +173,7 @@ def run_train():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
-    # args = parser.parse_args(['--model_dir', 'fa_2x_fpn_rvpd_var2cls1_kll1e-1_prior_p1_xywh'])
+    # args = parser.parse_args(['--model_dir', 'rcnn_mip'])
     
 
     # import libs
