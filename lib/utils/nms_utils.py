@@ -1,5 +1,6 @@
 import numpy as np
 import pdb
+import torch
 
 def set_cpu_nms(dets, thresh):
     """Pure Python NMS baseline."""
@@ -131,6 +132,41 @@ def cpu_kl_nms(dets, base_thr):
         # if ambi_order.shape[0] != 0 and supp_order.shape[0] != 0:    
         #     exsupp_idx = np.where(lstd[ambi_order] < lstd[supp_order].mean())[0]
         #     order = np.where(order == ambi_order[exsupp_idx])
+            
+    return np.array(keep)
+
+def rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr):
+    """Pure Python NMS baseline."""
+    x1 = pred_box[:, 0]
+    y1 = pred_box[:, 1]
+    x2 = pred_box[:, 2]
+    y2 = pred_box[:, 3]
+    scores = box_scr
+    lstd = box_lstd.mean(1)
+
+    areas = (x2 - x1) * (y2 - y1)
+    order = torch.argsort(-scores)
+
+    keep = []
+    real_keep = []
+    eps = 1e-8
+    while len(order) > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = torch.max(x1[i], x1[order[1:]])
+        yy1 = torch.max(y1[i], y1[order[1:]])
+        xx2 = torch.max(x2[i], x2[order[1:]])
+        yy2 = torch.max(y2[i], y2[order[1:]])
+
+        w = torch.max(torch.zeros_like(xx2), xx2 - xx1)
+        h = torch.max(torch.zeros_like(yy2), yy2 - yy1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
+
+        inds = torch.where(ovr <= base_thr)[0]
+        supp_inds = torch.where(ovr > base_thr)[0]
+        order[supp_inds + 1]
+        order = order[inds + 1]
             
     return np.array(keep)
 
