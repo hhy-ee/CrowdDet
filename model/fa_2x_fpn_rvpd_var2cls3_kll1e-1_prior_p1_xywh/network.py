@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kldiv_loss
+from det_oprs.loss_opr import kldiv_loss
 from det_oprs.my_loss_opr import freeanchor_loss
 from det_oprs.utils import get_padded_tensor
 
@@ -94,7 +94,7 @@ class RetinaNet_Criteria(nn.Module):
                 config.kl_weight)
         
         loss_dict['freeanchor_kldiv_loss'] = loss_kld
-        loss_dict['refd_positive_bag_loss'] = ref_loss_dict['positive_bag_loss']
+        loss_dict['ref_positive_bag_loss'] = ref_loss_dict['positive_bag_loss']
         loss_dict['ref_negative_bag_loss'] = ref_loss_dict['negative_bag_loss']
         
         return loss_dict
@@ -141,8 +141,8 @@ class RetinaNet_Head(nn.Module):
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
-        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
-                        self.bbox_pred, self.ref_cls_score]:
+        for modules in [self.cls_subnet, self.bbox_subnet, self.refine_subset,
+                        self.cls_score, self.bbox_pred, self.ref_cls_score]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
@@ -164,7 +164,7 @@ class RetinaNet_Head(nn.Module):
             pred_cls.append(cls)
             pred_reg.append(reg)
             # refine feature
-            boxes_feature = torch.cat((cls, reg[:, :4]), dim=1)
+            boxes_feature = torch.cat((reg[:, :4], cls), dim=1)
             boxes_feature = torch.cat((feature, boxes_feature), dim=1)
             refine_feature = self.refine_subset(boxes_feature)
             pred_ref_cls.append(self.ref_cls_score(refine_feature))

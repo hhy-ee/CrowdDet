@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.my_loss_opr import freeanchor_loss
+from det_oprs.loss_opr import refine_loss_focal
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -79,10 +79,20 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4)
         all_pred_ref_reg = torch.cat(pred_ref_reg_list, axis=1).reshape(-1, 4)
         # get ground truth
-        loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
-        ref_loss_dict = freeanchor_loss(all_anchors, all_pred_ref_cls, all_pred_ref_reg, gt_boxes, im_info)
-        loss_dict['ref_positive_bag_loss'] = ref_loss_dict['positive_bag_loss']
-        loss_dict['ref_negative_bag_loss'] = ref_loss_dict['negative_bag_loss']
+        labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
+        loss_retina = refine_loss_focal(
+                all_pred_reg, all_pred_cls, bbox_target, labels)
+        loss_refine = refine_loss_focal(
+                all_pred_ref_reg, all_pred_ref_cls, bbox_target, labels)
+        # only main labels
+        num_pos = (labels[:, 0] > 0).sum().item()
+        self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
+            1 - self.loss_normalizer_momentum) * max(num_pos, 1)
+        loss_retina = loss_retina.sum() / self.loss_normalizer
+        loss_refine = loss_refine.sum() / self.loss_normalizer
+        loss_dict = {}
+        loss_dict['retina_loss'] = loss_retina
+        loss_dict['ref_retina_loss'] = loss_refine
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -149,10 +159,9 @@ class RetinaNet_Head(nn.Module):
         pred_ref_reg = []
         for feature in features:
             cls = self.cls_score(self.cls_subnet(feature))
-            reg = self.bbox_pred(self.bbox_subnet(feature))
+            reg= self.bbox_pred(self.bbox_subnet(feature))
             pred_cls.append(cls)
             pred_reg.append(reg)
-            # refine feature
             boxes_feature = torch.cat((reg, cls), dim=1)
             boxes_feature = torch.cat((feature, boxes_feature), dim=1)
             refine_feature = self.refine_subset(boxes_feature)
