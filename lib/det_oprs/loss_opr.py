@@ -298,6 +298,45 @@ def emd_vpd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     loss = loss.reshape(-1, 2).sum(axis=1)
     return loss.reshape(-1, 1)
 
+def mip_vpd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
+    # reshape
+    pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
+    pred_score = torch.cat([p_s0, p_s1], axis=1).reshape(-1, p_s0.shape[-1])
+    targets = targets.reshape(-1, 4)
+    labels = labels.long().flatten()
+    # cons masks
+    valid_masks = labels >= 0
+    fg_masks = labels > 0
+    # multiple class
+    pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
+    # variational inference
+    pred_mean = pred_delta[:, :, :4]
+    pred_lstd = pred_delta[:, :, 4:]
+    scale = torch.tensor(config.prior_std).type_as(pred_lstd)
+    pred_scale_std = pred_lstd.exp().mul(scale)
+    pred_delta = pred_mean + pred_scale_std * torch.randn_like(pred_mean)
+    fg_gt_classes = labels[fg_masks]
+    pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
+    # loss for regression
+    localization_loss = smooth_l1_loss(
+        pred_delta,
+        targets[fg_masks],
+        config.rcnn_smooth_l1_beta)
+    # loss for classification
+    objectness_loss = softmax_loss(pred_score, labels)
+    vl_gt_classes = labels[valid_masks]
+    pred_mean = pred_mean[valid_masks, vl_gt_classes, :]
+    pred_lstd = pred_lstd[valid_masks, vl_gt_classes, :]
+    # loss for KL
+    kldivergence_loss = rcnn_kldiv_loss(
+        pred_mean,
+        pred_lstd,
+        config.kl_weight)
+    loss = objectness_loss * valid_masks + kldivergence_loss * valid_masks
+    loss[fg_masks] = loss[fg_masks] + localization_loss
+    loss = loss.reshape(-1, 2).sum(axis=1)
+    return loss.reshape(-1, 1)
+
 def refine_loss_softmax(pred_delta, pred_score, targets, labels):
     # reshape
     targets = targets.reshape(-1, 4)

@@ -101,6 +101,10 @@ class Config:
     bbox_normalize_means = np.array([0, 0, 0, 0])
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
     save_data = False
+    
+    # ----------vpd config---------- #
+    kl_weight = 1e-1
+    prior_std = [0.125, 0.125, 0.35, 0.35]
 
 config = Config()
 
