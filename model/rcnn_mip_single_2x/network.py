@@ -84,15 +84,10 @@ class RCNN(nn.Module):
         pred_cls_1 = self.pred_cls_1(flatten_feature)
         pred_delta_1 = self.pred_delta_1(flatten_feature)
         if self.training:
-            loss0 = mip_loss_softmax(
+            loss = mip_loss_softmax(
                         pred_delta_0, pred_cls_0,
                         pred_delta_1, pred_cls_1,
                         bbox_targets, labels)
-            loss1 = mip_loss_softmax(
-                        pred_delta_1, pred_cls_1,
-                        pred_delta_0, pred_cls_0,
-                        bbox_targets, labels)
-            loss = torch.cat([loss0, loss1], axis=1)
             # requires_grad = False
             loss_mip = loss.mean()
             loss_dict = {}

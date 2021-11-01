@@ -48,7 +48,7 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 1e-3 * 1.25
+    base_lr = 1e-3 * 1.25 * 2
 
     warm_iter = 800
     max_epoch = 30

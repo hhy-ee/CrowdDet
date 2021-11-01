@@ -142,7 +142,7 @@ def rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr):
     x2 = pred_box[:, 2]
     y2 = pred_box[:, 3]
     scores = box_scr
-    lstd = box_lstd.mean(1)
+    lstd = box_lstd.mean(dim=1)
 
     areas = (x2 - x1) * (y2 - y1)
     order = torch.argsort(-scores)
@@ -152,23 +152,68 @@ def rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr):
     eps = 1e-8
     while len(order) > 0:
         i = order[0]
-        keep.append(i)
-        xx1 = torch.max(x1[i], x1[order[1:]])
-        yy1 = torch.max(y1[i], y1[order[1:]])
-        xx2 = torch.max(x2[i], x2[order[1:]])
-        yy2 = torch.max(y2[i], y2[order[1:]])
+        keep.append(i.reshape(1))
+        xx1 = torch.max(x1[i], x1[order])
+        yy1 = torch.max(y1[i], y1[order])
+        xx2 = torch.min(x2[i], x2[order])
+        yy2 = torch.min(y2[i], y2[order])
 
         w = torch.max(torch.zeros_like(xx2), xx2 - xx1)
         h = torch.max(torch.zeros_like(yy2), yy2 - yy1)
         inter = w * h
-        ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
+        ovr = inter / (areas[i] + areas[order] - inter + eps)
 
         inds = torch.where(ovr <= base_thr)[0]
         supp_inds = torch.where(ovr > base_thr)[0]
-        order[supp_inds + 1]
-        order = order[inds + 1]
-            
-    return np.array(keep)
+        real_keep.append(order[supp_inds[lstd[supp_inds].argmax()].reshape(1)])
+        order = order[inds]
+    return torch.cat(keep)
+
+def new_rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr):
+    _, idx = box_scr.sort(0, descending=True)
+    boxes_idx = pred_box[idx]
+    lstd_idx = box_lstd[idx].mean(dim=1)
+    iou = box_overlap_opr(boxes_idx, boxes_idx).triu_(diagonal=1)
+    B = iou
+    while 1:
+        A = B
+        maxA, _ = torch.max(A, dim=0)
+        E = (maxA <= base_thr).float().unsqueeze(1).expand_as(A)
+        B = iou.mul(E)
+        if A.equal(B) == True:
+            break
+    keep_idx = idx[maxA <= base_thr]
+    lstd = torch.where(
+        iou[keep_idx, :] > base_thr,
+        lstd_idx[None, :],
+        -20 * torch.ones(1, dtype=pred_box.dtype, device=pred_box.device)
+    )
+    real_keep_idx = torch.max(lstd, dim=1).indices
+    del A,B,iou
+
+    # for i in keep_idx:
+    #     supp = torch.where(iou[i, :] > base_thr)[0]
+    #     supp_lstd = 1
+    # keep1 = rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr)
+    return real_keep_idx
+
+def box_overlap_opr(box1, box2):
+    assert box1.ndim == 2
+    assert box2.ndim == 2
+    area_box1 = (box1[:, 2] - box1[:, 0]) * (box1[:, 3] - box1[:, 1])
+    area_box2 = (box2[:, 2] - box2[:, 0]) * (box2[:, 3] - box2[:, 1])
+    width_height = torch.min(box1[:, None, 2:], box2[:, 2:]) - \
+                    torch.max(box1[:, None, :2], box2[:, :2])
+    width_height.clamp_(min=0)
+    inter = width_height.prod(dim=2)
+    del width_height
+    # handle empty boxes
+    iou = torch.where(
+        inter > 0,
+        inter / (area_box1[:, None] + area_box2 - inter),
+        torch.zeros(1, dtype=inter.dtype, device=inter.device),
+    )
+    return iou
 
 def nms_for_plot(dets, base_thr):
     """Pure Python NMS baseline."""

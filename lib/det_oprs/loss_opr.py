@@ -308,7 +308,7 @@ def mip_vpd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     valid_masks = labels >= 0
     fg_masks = labels > 0
     # multiple class
-    pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
+    pred_delta = pred_delta.reshape(-1, config.num_classes, 8)
     # variational inference
     pred_mean = pred_delta[:, :, :4]
     pred_lstd = pred_delta[:, :, 4:]
