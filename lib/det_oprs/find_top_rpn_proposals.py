@@ -135,7 +135,7 @@ def find_top_vpd_rpn_proposals(is_train, rpn_bbox_offsets_list, rpn_bbox_lstds_l
         topk_idx = idx[:num_proposals].flatten()
         batch_proposals = batch_proposals[topk_idx]
         # For each image, run a total-level NMS, and choose topk results.
-        keep = nms_utils.rpn_kl_nms(batch_proposals, batch_lstds, batch_probs, nms_threshold)
+        keep = nms_utils.new_rpn_kl_nms(batch_proposals, batch_lstds, batch_probs, nms_threshold)
         keep = keep[:post_nms_top_n]
         batch_proposals = batch_proposals[keep]
         #batch_probs = batch_probs[keep]

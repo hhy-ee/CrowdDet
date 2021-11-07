@@ -103,7 +103,7 @@ class Config:
     save_data = False
 
     # ----------vpd config---------- #
-    kl_weight = 1e-1
+    rpn_kld_beta = 1e-1
     prior_std = [0.125, 0.125, 0.35, 0.35]
     save_data = False
     
