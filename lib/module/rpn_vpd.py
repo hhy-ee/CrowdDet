@@ -44,19 +44,16 @@ class RPN(nn.Module):
         
         # variational inference
         list_size = len(pred_bbox_offsets_list)
-        if self.training:
-            pred_bbox_list = []
-            pred_mean_list = []
-            pred_lstd_list = []
-            for l in range(list_size):
-                mean_perlvl = pred_bbox_offsets_list[l][:, :4*config.num_cell_anchors]
-                lstd_perlvl = pred_bbox_offsets_list[l][:, 4*config.num_cell_anchors:]
-                bbox_perlvl  = mean_perlvl + lstd_perlvl.exp() * torch.randn_like(mean_perlvl)
-                pred_bbox_list.append(bbox_perlvl)
-                pred_mean_list.append(mean_perlvl)
-                pred_lstd_list.append(lstd_perlvl)
-        else:
-            pred_bbox_list = [pred_bbox_offsets_list[l][:, :4*config.num_cell_anchors] for l in range(list_size)]
+        pred_bbox_list = []
+        pred_mean_list = []
+        pred_lstd_list = []
+        for l in range(list_size):
+            mean_perlvl = pred_bbox_offsets_list[l][:, :4*config.num_cell_anchors]
+            lstd_perlvl = pred_bbox_offsets_list[l][:, 4*config.num_cell_anchors:]
+            bbox_perlvl  = mean_perlvl + lstd_perlvl.exp() * torch.randn_like(mean_perlvl)
+            pred_bbox_list.append(bbox_perlvl)
+            pred_mean_list.append(mean_perlvl)
+            pred_lstd_list.append(lstd_perlvl)
 
         # sample from the predictions
         rpn_rois = find_top_vpd_rpn_proposals(

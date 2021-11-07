@@ -186,9 +186,9 @@ def new_rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr):
     lstd = torch.where(
         iou[keep_idx, :] > base_thr,
         lstd_idx[None, :],
-        -20 * torch.ones(1, dtype=pred_box.dtype, device=pred_box.device)
+        20 * torch.ones(1, dtype=pred_box.dtype, device=pred_box.device)
     )
-    real_keep_idx = torch.max(lstd, dim=1).indices
+    real_keep_idx = torch.min(lstd, dim=1).indices
     del A,B,iou
 
     # for i in keep_idx:
