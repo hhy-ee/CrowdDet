@@ -41,6 +41,12 @@ class Network(nn.Module):
         else:
             #pred_bbox = union_inference(
             #        anchors_list, pred_cls_list, pred_reg_list, im_info)
+            pred_cls_list = [
+                _.permute(0, 2, 3, 1).reshape(pred_cls_list[0].shape[0], -1, config.num_classes-1)
+            for _ in pred_cls_list]
+            pred_reg_list = [
+                _.permute(0, 2, 3, 1).reshape(pred_cls_list[0].shape[0], -1, 8)
+            for _ in pred_reg_list]
             pred_bbox = per_layer_inference(
                     anchors_list, pred_cls_list, pred_reg_list, im_info)
             return pred_bbox.cpu().detach()
@@ -160,7 +166,7 @@ class RetinaNet_Criteria(nn.Module):
         loss_dict['retina_smooth_l1'] = loss_reg
         loss_dict['retina_ref_smooth_l1'] = loss_ref_reg
         loss_dict['retina_kldiv_loss'] = loss_kld
-        return loss_dict
+        return loss_dict, 
 
 class RetinaNet_Head(nn.Module):
     def __init__(self):
@@ -229,7 +235,7 @@ class RetinaNet_Head(nn.Module):
             pred_reg.append(reg)
         return pred_cls, pred_reg, features, self.refine_subset, self.ref_cls_score, self.ref_bbox_pred
 
-def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ref_reg_list, im_info):
+def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     keep_anchors = []
     keep_cls = []
     keep_reg = []
@@ -238,7 +244,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ref_reg
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_ref_reg_list[l_id][0].reshape(-1, 8)[:, :4]
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 8)[:, :4]
         pred_lstd = pred_reg_list[l_id][0].reshape(-1, 8)[:, 4:]
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
