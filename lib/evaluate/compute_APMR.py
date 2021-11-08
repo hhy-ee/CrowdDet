@@ -10,13 +10,13 @@ def compute_APMR(dt_path, gt_path, target_key=None, mode=0):
     line = 'AP:{:.4f}, MR:{:.4f}.'.format(mAP, mMR)
     return mAP, mMR
 
-def compute_my_APMR(dt_path, gt_path, target_key=None, len_data=None, mode=3):
-    database = MyDatabase(gt_path, dt_path, target_key, None, len_data, mode)
-    database.compare()
+def compute_my_APMR(mode, dt_path, gt_path, target_key=None, len_data=None):
+    database = MyDatabase(mode, gt_path, dt_path, target_key, None, len_data)
+    pltscrlist = database.compare()
     mAP,_ = database.eval_AP()
     mMR,_ = database.eval_MR()
     line = 'AP:{:.4f}, MR:{:.4f}.'.format(mAP, mMR)
-    return mAP, mMR, database.scorelist
+    return mAP, mMR, database.scorelist, pltscrlist
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Analyze a json result file with iou match')

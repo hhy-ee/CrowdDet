@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import sys
 import math
 import argparse
@@ -36,7 +36,7 @@ def eval_all(args, config, network):
     # multiprocessing
     num_devs = len(devices)
     # len_dataset = len(crowdhuman)
-    len_dataset = 100
+    len_dataset = 5
     num_image = math.ceil(len_dataset / num_devs)
     result_queue = Queue(500)
     procs = []
@@ -64,8 +64,11 @@ def eval_all(args, config, network):
     # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     # for line in res_line:
     #     eval_fid.write(line+'\n')
-    AP, MR, scorelist = compute_APMR.compute_my_APMR(fpath, config.eval_source, 'box', len_dataset)
-    save_data(scorelist, len_dataset)
+    AP, MR, scorelist, pltscrlist = compute_APMR.compute_my_APMR(4, fpath, config.eval_source, 'box', len_dataset)
+    if config.save_data and 'set' not in config.test_nms_method:
+        save_data(scorelist, len_dataset)
+    elif config.save_data and 'set' in config.test_nms_method:
+        save_set_data(pltscrlist, len_dataset)
     # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
     line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
     print(line)
@@ -99,6 +102,17 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
+            pred_boxes = pred_boxes[keep]
+        elif config.test_nms_method == 'set_kl_nms':
+            assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
+            top_k = 2
+            n = pred_boxes.shape[0]
+            pred_boxes = pred_boxes.reshape(-1, 10)
+            idents = np.tile(np.arange(n)[:,None], (1, top_k)).reshape(-1, 1)
+            pred_boxes = np.hstack((pred_boxes, idents))
+            keep = pred_boxes[:, 4] > config.pred_cls_threshold
+            pred_boxes = pred_boxes[keep]
+            keep = nms_utils.set_cpu_kl_nms(pred_boxes, 0.5)
             pred_boxes = pred_boxes[keep]
         elif config.test_nms_method == 'normal_nms':
             if not config.save_data:
@@ -146,7 +160,13 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
         result_queue.put_nowait(result_dict)
 
 def boxes_dump(boxes):
-    if boxes.shape[-1] == 8:
+    if boxes.shape[-1] == 11:
+        result = [{'box':[round(i, 1) for i in box[:4].tolist()],
+                   'score':round(float(box[4]), 5),
+                   'tag':int(box[5]),
+                   'lstd':float(box[6:10].mean()),
+                   'proposal_num':int(box[10])} for box in boxes]
+    elif boxes.shape[-1] == 8:
         result = [{'box':[round(i, 1) for i in box[:4].tolist()],
                    'score':round(float(box[4]), 5),
                    'tag':int(box[5]),
@@ -177,7 +197,7 @@ def run_test():
     # args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh', 
     #                           '--resume_weights', '38'])
-    args = parser.parse_args(['--model_dir', 'farcnn_fpn_vpd_kll1e-3_prior_p1_wh', 
+    args = parser.parse_args(['--model_dir', 'rcnn_mip_single_vpd_kll1e-1_prior_p1_xywh', 
                               '--resume_weights', '30'])
 
     # import libs
@@ -203,6 +223,30 @@ def save_data(scorelist, len_dataset):
     f.close()
     return 0
 
+def save_set_data(scorelist, len_dataset):
+    import numpy as np
+    f = open("./vis_data.txt",'a')
+    for i in range(len_dataset):
+        result = scorelist[i]
+        boxes_scr = np.array([r[0][4] for r in result])
+        boxes_lstd = np.array([r[0][5] for r in result])
+        boxes_num = np.array([r[0][6] for r in result])
+        is_tp = np.array([r[1] for r in result])
+        ruler = np.arange(len(boxes_num))
+        while ruler.size>0:
+            basement = ruler[0]
+            ruler = ruler[1:]
+            loc = np.where(boxes_num[ruler] == boxes_num[basement])[0]
+            if loc.shape[0] != 0:
+                # data = np.concatenate([boxes_scr[basement, None], boxes_lstd[basement, None], is_tp[basement, None], \
+                #     boxes_scr[ruler[loc]], boxes_lstd[ruler[loc]], is_tp[ruler[loc]]], axis=0).reshape(1, -1)
+                tp = is_tp[ruler[loc]] + is_tp[basement, None]
+                kld = 1
+                data = np.concatenate([kld, tp], axis=0).reshape(1, -1)
+                np.savetxt(f, data)
+                ruler = np.delete(ruler, loc)
+    f.close()
+    return 0
+
 if __name__ == '__main__':
     run_test()
-

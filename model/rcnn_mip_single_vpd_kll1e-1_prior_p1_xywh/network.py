@@ -99,13 +99,19 @@ class RCNN(nn.Module):
             tag = tag.repeat(pred_cls_0.shape[0], 1).reshape(-1,1)
             pred_scores_0 = F.softmax(pred_cls_0, dim=-1)[:, 1:].reshape(-1, 1)
             pred_scores_1 = F.softmax(pred_cls_1, dim=-1)[:, 1:].reshape(-1, 1)
+            pred_lstd_0 = pred_delta_0.reshape(-1,2,8)[:, 1, 4:]
+            pred_lstd_1 = pred_delta_1.reshape(-1,2,8)[:, 1, 4:]
             pred_delta_0 = pred_delta_0.reshape(-1,2,8)[:, 1, :4]
             pred_delta_1 = pred_delta_1.reshape(-1,2,8)[:, 1, :4]
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox_0 = restore_bbox(base_rois, pred_delta_0, True)
             pred_bbox_1 = restore_bbox(base_rois, pred_delta_1, True)
-            pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag], axis=1)
-            pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag], axis=1)
+            if 'kl' not in  config.test_nms_method:
+                pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag], axis=1)
+                pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag], axis=1)
+            else:
+                pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_lstd_0], axis=1)
+                pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_lstd_1], axis=1)
             pred_bbox = torch.cat((pred_bbox_0, pred_bbox_1), axis=1)
             return pred_bbox
 

@@ -71,7 +71,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(21, int(args.resume_weights)+1):
+    for epoch_id in range(26, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -149,6 +149,17 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
             pred_boxes = pred_boxes[keep]
+        elif config.test_nms_method == 'set_kl_nms':
+            assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
+            top_k = 2
+            n = pred_boxes.shape[0]
+            pred_boxes = pred_boxes.reshape(-1, 10)
+            idents = np.tile(np.arange(n)[:,None], (1, top_k)).reshape(-1, 1)
+            pred_boxes = np.hstack((pred_boxes, idents))
+            keep = pred_boxes[:, 4] > config.pred_cls_threshold
+            pred_boxes = pred_boxes[keep]
+            keep = nms_utils.set_cpu_kl_nms(pred_boxes, 0.5)
+            pred_boxes = pred_boxes[keep]
         elif config.test_nms_method == 'normal_nms':
             if not config.save_data:
                 assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
@@ -187,7 +198,12 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
         result_queue.put_nowait(result_dict)
 
 def boxes_dump(boxes):
-    if boxes.shape[-1] == 8:
+    if boxes.shape[-1] == 11:
+        result = [{'box':[round(i, 1) for i in box[:4].tolist()],
+                   'score':round(float(box[4]), 5),
+                   'tag':int(box[5]),
+                   'lstd':float(box[6:10].mean())} for box in boxes]
+    elif boxes.shape[-1] == 8:
         result = [{'box':[round(i, 1) for i in box[:4].tolist()],
                    'score':round(float(box[4]), 5),
                    'tag':int(box[5]),
@@ -216,8 +232,8 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'fa_2x_fpn_vpd_varsreg_kll1e-1_prior_p1_xywh', 
-    #                           '--resume_weights', '21'])
+    # args = parser.parse_args(['--model_dir', 'rcnn_mip_single_vpd_kll1e-1_prior_p1_xywh', 
+    #                           '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

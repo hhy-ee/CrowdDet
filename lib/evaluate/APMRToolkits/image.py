@@ -39,6 +39,9 @@ class Image(object):
             elif self.eval_mode == 3:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
+            elif self.eval_mode == 4:
+                self.gtboxes = body_bbox
+                self._ignNum = (body_bbox[:, -1] == -1).sum()
             else:
                 raise Exception('Unknown evaluation mode!')
         if not gtflag:
@@ -53,6 +56,8 @@ class Image(object):
                 self.dtboxes = np.hstack((body_dtboxes, head_dtboxes))
             elif self.eval_mode == 3:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd')
+            elif self.eval_mode == 4:
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num')
             else:
                 raise Exception('Unknown evaluation mode!')
 
@@ -120,8 +125,8 @@ class Image(object):
         dt_matched = np.zeros(len(dtboxes))
         gt_matched = np.zeros(len(gtboxes))
 
-        dtboxes = np.array(sorted(dtboxes, key=lambda x: x[-2], reverse=True))
-        gtboxes = np.array(sorted(gtboxes, key=lambda x: x[-1], reverse=True))
+        dtboxes = np.array(sorted(dtboxes, key=lambda x: x[4], reverse=True))
+        gtboxes = np.array(sorted(gtboxes, key=lambda x: x[4], reverse=True))
         if len(dtboxes):
             overlap_iou = self.box_overlap_opr(dtboxes, gtboxes, True)
             overlap_ioa = self.box_overlap_opr(dtboxes, gtboxes, False)
@@ -289,7 +294,7 @@ class Image(object):
         body_bbox[:, 2:4] += body_bbox[:, :2]
         return body_bbox, head_bbox
 
-    def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None):
+    def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None, key_ex=None):
         assert key_name in dict_input
         if len(dict_input[key_name]) < 1:
             return np.empty([0, 5])
@@ -299,9 +304,14 @@ class Image(object):
                 assert key_score in dict_input[key_name][0]
             if key_tag:
                 assert key_tag in dict_input[key_name][0]
+            if key_ex:
+                assert key_tag in dict_input[key_name][0]
         if key_score:
             if key_tag:
-                bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag])) for rb in dict_input[key_name]])
+                if key_ex:
+                    bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag], rb[key_ex])) for rb in dict_input[key_name]])
+                else:
+                    bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag])) for rb in dict_input[key_name]])
             else:
                 bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score])) for rb in dict_input[key_name]])
         else:

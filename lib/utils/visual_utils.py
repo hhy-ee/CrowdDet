@@ -39,6 +39,60 @@ def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='whi
     return img
 
 
+def draw_mip_for_set_kl(img, boxes, boxes_info, args, line_thick=1, line_color=('green','blue','red')):
+    width = img.shape[1]
+    height = img.shape[0]
+    (inf_result, gt_boxes, gt_matched) = boxes_info
+    boxes_scr = boxes[:, 4]
+    boxes_loc = boxes[:, :4]
+    boxes_lstd = boxes[:, 6:10].mean(1)
+    boxes_num = boxes[:, 10]
+
+    ruler = np.arange(len(boxes_num))
+    i=0
+    while ruler.size>0:
+        basement = ruler[0]
+        ruler = ruler[1:]
+        loc = np.where(boxes_num[ruler] == boxes_num[basement])[0]
+        if loc.shape[0] != 0:
+            plot_img = img.copy()
+            box_1 = boxes_loc[basement]
+            box_2 = boxes_loc[ruler[loc].squeeze()]
+            box_1 = np.array([max(box_1[0], 0), max(box_1[1], 0),
+                    min(box_1[2], width - 1), min(box_1[3], height - 1)])
+            box_2 = np.array([max(box_2[0], 0), max(box_2[1], 0),
+                    min(box_2[2], width - 1), min(box_2[3], height - 1)])
+            gt_1 = gt_boxes[inf_result[basement][2]]
+            gt_2 = gt_boxes[inf_result[ruler[loc].squeeze()][2]]
+            gt_1 = np.array([max(gt_1[0], 0), max(gt_1[1], 0),
+                    min(gt_1[2], width - 1), min(gt_1[3], height - 1)])
+            gt_2 = np.array([max(gt_2[0], 0), max(gt_2[1], 0),
+                    min(gt_2[2], width - 1), min(gt_2[3], height - 1)])
+            is_fp_1 = inf_result[basement][1]
+            is_fp_2 = inf_result[ruler[loc].squeeze()][1]
+
+            x11,y11,x12,y12 = np.array(box_1[:4]).astype(int)
+            x21,y21,x22,y22 = np.array(box_2[:4]).astype(int)
+
+            a11,b11,a12,b12 = np.array(gt_1[:4]).astype(int)
+            a21,b21,a22,b22 = np.array(gt_2[:4]).astype(int)
+
+            cv2.rectangle(plot_img, (x11,y11), (x12,y12), color[line_color[is_fp_1]], line_thick)
+            cv2.rectangle(plot_img, (x21,y21), (x22,y22), color[line_color[is_fp_2]], line_thick)
+            cv2.rectangle(plot_img, (a11,b11), (a12,b12), color[line_color[2]], line_thick)
+            cv2.rectangle(plot_img, (a21,b21), (a22,b22), color[line_color[2]], line_thick)
+
+            text1 = "{:.3f} {:.3f}".format(boxes_scr[basement], boxes_lstd[basement])
+            text2 = "{:.3f} {:.3f}".format(boxes_scr[ruler[loc].squeeze()], boxes_lstd[ruler[loc].squeeze()])
+            cv2.putText(plot_img, text1, (x11, y11 - 7), cv2.FONT_ITALIC, 0.5, color['white'], line_thick)
+            cv2.putText(plot_img, text2, (x21, y21 - 7), cv2.FONT_ITALIC, 0.5, color['white'], line_thick)
+            name = args.img_path.split('/')[-1].split('.')[-2]
+            fpath = 'outputs/{}_{:.1f}.png'.format(name, i)
+            cv2.imwrite(fpath, plot_img)
+            ruler = np.delete(ruler, loc)
+            i = i+1
+
+
 def draw_fn_boxes(img, boxes, plot_box_info, args, line_thick=1, line_color=('red','green')):
     width = img.shape[1]
     height = img.shape[0]
@@ -236,6 +290,30 @@ def inference_result(gt_path, img_path, pred_boxes, im_info):
             score_list.sort(key=lambda x: x[0][4], reverse=True)
     return score_list, gt_list, gt_matched
 
+def inference_result_for_set_kl(gt_path, img_path, pred_boxes, im_info):
+    pred_boxes_lstd = np.mean(pred_boxes[:,6:10], axis=1, keepdims=True)
+    pred_boxes = np.concatenate([pred_boxes[:,:6], pred_boxes_lstd, pred_boxes[:,10:11]], axis=1)
+    with open(gt_path, "r") as f:
+        lines = f.readlines()
+        records = [json.loads(line.strip('\n')) for line in lines]
+    for record in records:
+        if record["ID"] == img_path.split('/')[-1].split('.')[0]:
+            h, w=int(im_info[0, -3]), int(im_info[0, -2])
+            gt_bboxes = load_gt_boxes(record, 'gtboxes')
+            pred_boxes, gt_bboxes = clip_all_boader(pred_boxes, gt_bboxes, h, w)
+            score_list, gt_list, gt_matched = compare_caltech(pred_boxes, gt_bboxes, 0.5)
+            score_list.sort(key=lambda x: x[0][4], reverse=True)
+    return score_list, gt_list, gt_matched
+
+def test_result_for_set_kl(gt_bboxes, pred_boxes, im_info):
+    pred_boxes_lstd = np.mean(pred_boxes[:,6:10], axis=1, keepdims=True)
+    pred_boxes = np.concatenate([pred_boxes[:,:6], pred_boxes_lstd, pred_boxes[:,10:11]], axis=1)
+    h, w=int(im_info[0, -3]), int(im_info[0, -2])
+    pred_boxes, gt_bboxes = clip_all_boader(pred_boxes, gt_bboxes, h, w)
+    score_list, gt_list, gt_matched = compare_caltech(pred_boxes, gt_bboxes, 0.5)
+    score_list.sort(key=lambda x: x[0][4], reverse=True)
+    return score_list, gt_list, gt_matched
+
 def compare_caltech(dtboxes, gtboxes, thres):
     """
     :meth: match the detection results with the groundtruth by Caltech matching strategy
@@ -276,14 +354,13 @@ def compare_caltech(dtboxes, gtboxes, thres):
                         maxpos = j
         if maxpos >= 0:
             if gtboxes[maxpos, -1] > 0:
+                dt_matched[i] = maxpos + 1
                 gt_matched[maxpos] = int(1 + i)
-                dt_matched[i] = maxpos+1
-                maxj = overlap_iou[i].argmax()
-                scorelist.append((dt, 1, maxj, overlap_iou[i][maxj]))
+                scorelist.append((dt, 1, maxpos, overlap_iou[i][maxpos]))
             else:
-                dt_matched[i] = -1
-                maxj = overlap_iou[i].argmax()
-                scorelist.append((dt, -1, maxj, overlap_iou[i][maxj]))
+                dt_matched[i] = maxpos + 1
+                gt_matched[maxpos] = int(1 + i)
+                scorelist.append((dt, -1, maxpos, overlap_iou[i][maxpos]))
         else:
             dt_matched[i] = 0
             maxj = overlap_iou[i].argmax()

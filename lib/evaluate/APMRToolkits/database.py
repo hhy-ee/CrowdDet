@@ -142,7 +142,7 @@ class Database(object):
 
 
 class MyDatabase(object):
-    def __init__(self, gtpath=None, dtpath=None, body_key=None, head_key=None, len_data=None, mode=3):
+    def __init__(self, mode, gtpath=None, dtpath=None, body_key=None, head_key=None, len_data=None):
         """
         mode=0: only body; mode=1: only head
         """
@@ -179,15 +179,19 @@ class MyDatabase(object):
         """
         assert matching is None or matching == "VOC", matching
         scorelist = list()
+        pltscrlist = list()
         for ID in self.images:
             if matching == "VOC":
                 result = self.images[ID].compare_voc(thres)
             else:
                 result = self.images[ID].my_compare_caltech(thres)
             scorelist.extend(result)
+            result.sort(key=lambda x: x[0][4], reverse=True)
+            pltscrlist.append(result)
         # In the descending sort of dtbox score.
         scorelist.sort(key=lambda x: x[0][4], reverse=True)
         self.scorelist = scorelist
+        return pltscrlist
 
     def eval_MR(self, ref="CALTECH_-2"):
         """
