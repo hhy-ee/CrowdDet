@@ -434,6 +434,24 @@ def emd_loss_focal(p_b0, p_s0, p_b1, p_s1, targets, labels):
     loss = loss.reshape(-1, 2).sum(axis=1)
     return loss.reshape(-1, 1)
 
+def mip_loss_focal(p_b0, p_s0, p_b1, p_s1, targets, labels):
+    pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
+    pred_score = torch.cat([p_s0, p_s1], axis=1).reshape(-1, p_s0.shape[-1])
+    targets = targets.reshape(-1, 4)
+    labels = labels.long().reshape(-1, 1)
+    valid_mask = (labels >= 0).flatten()
+    objectness_loss = focal_loss(pred_score, labels,
+            config.focal_loss_alpha, config.focal_loss_gamma)
+    fg_masks = (labels > 0).flatten()
+    localization_loss = smooth_l1_loss(
+            pred_delta[fg_masks],
+            targets[fg_masks],
+            config.smooth_l1_beta)
+    loss = objectness_loss * valid_mask
+    loss[fg_masks] = loss[fg_masks] + localization_loss
+    loss = loss.reshape(-1, 2).sum(axis=1)
+    return loss.reshape(-1, 1)
+
 def refine_loss_focal(pred_delta, pred_score, targets, labels):
     targets = targets.reshape(-1, 4)
     labels = labels.long().reshape(-1, 1)
