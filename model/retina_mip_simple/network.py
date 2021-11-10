@@ -85,7 +85,7 @@ class RetinaNet_Criteria(nn.Module):
         del all_pred_cls
         del all_pred_reg
         # requires_grad = False
-        loss_mip = loss.mean()
+        loss_mip = loss.mean(dim=1)
         # only main labels
         num_pos = (labels[:, 0] > 0).sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
