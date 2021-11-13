@@ -36,10 +36,7 @@ class Image(object):
                 gt_tag = np.array([body_bbox[i,-1]!=-1 and head_bbox[i,-1]!=-1 for i in range(len(body_bbox))])
                 self._ignNum = (gt_tag == 0).sum()
                 self.gtboxes = np.hstack((body_bbox[:, :-1], head_bbox[:, :-1], gt_tag.reshape(-1, 1)))
-            elif self.eval_mode == 3:
-                self.gtboxes = body_bbox
-                self._ignNum = (body_bbox[:, -1] == -1).sum()
-            elif self.eval_mode == 4:
+            elif self.eval_mode >= 3:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
             else:
@@ -58,6 +55,8 @@ class Image(object):
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd')
             elif self.eval_mode == 4:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num')
+            elif self.eval_mode == 5:
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'mip_kld', 'proposal_num')
             else:
                 raise Exception('Unknown evaluation mode!')
 

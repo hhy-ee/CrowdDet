@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import mip_vpd_loss_softmax
+from det_oprs.loss_opr import mip_vpd_mkl_loss_softmax
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -84,7 +84,7 @@ class RCNN(nn.Module):
         pred_cls_1 = self.pred_cls_1(flatten_feature)
         pred_delta_1 = self.pred_delta_1(flatten_feature)
         if self.training:
-            loss = mip_vpd_loss_softmax(
+            loss = mip_vpd_mkl_loss_softmax(
                         pred_delta_0, pred_cls_0,
                         pred_delta_1, pred_cls_1,
                         bbox_targets, labels)
@@ -110,21 +110,10 @@ class RCNN(nn.Module):
                 pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag], axis=1)
                 pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag], axis=1)
             else:
-                # mutil-box kld
-                # pred_mip_kld_0 = (1 + pred_lstd_0.mul(2) - pred_lstd_1.mul(2) - (pred_lstd_0.mul(2).exp() + \
-                # (pred_delta_0 - pred_delta_1).pow(2))/ pred_lstd_1.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
-                # pred_mip_kld_1 = (1 + pred_lstd_1.mul(2) - pred_lstd_0.mul(2) - (pred_lstd_1.mul(2).exp() + \
-                # (pred_delta_1 - pred_delta_0).pow(2))/ pred_lstd_0.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
-                
-                # box vs N(0,1) kld
-                scale = torch.tensor(config.prior_std).type_as(pred_lstd_0)
-                pred_scale_lstd_0 = pred_lstd_0.exp().mul(scale).log()
-                pred_scale_lstd_1 = pred_lstd_1.exp().mul(scale).log()
-                pred_mip_kld_0 = (1 + pred_scale_lstd_0.mul(2) - pred_delta_0.pow(2) - \
-                                    pred_scale_lstd_0.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
-                pred_mip_kld_1 = (1 + pred_scale_lstd_1.mul(2) - pred_delta_1.pow(2) - \
-                                    pred_scale_lstd_1.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
-
+                pred_mip_kld_0 = (1 + pred_lstd_0.mul(2) - pred_lstd_1.mul(2) - (pred_lstd_0.mul(2).exp() + \
+                (pred_delta_0 - pred_delta_1).pow(2))/ pred_lstd_1.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
+                pred_mip_kld_1 = (1 + pred_lstd_1.mul(2) - pred_lstd_0.mul(2) - (pred_lstd_1.mul(2).exp() + \
+                (pred_delta_1 - pred_delta_0).pow(2))/ pred_lstd_0.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
                 pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_mip_kld_0, pred_lstd_0], axis=1)
                 pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_mip_kld_1, pred_lstd_1], axis=1)
             pred_bbox = torch.cat((pred_bbox_0, pred_bbox_1), axis=1)

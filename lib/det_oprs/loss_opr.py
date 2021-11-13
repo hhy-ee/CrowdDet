@@ -377,8 +377,7 @@ def mip_vpd_mkl_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     pred_multi_lstd = pred_mean.reshape(-1,2,4)
     multi_kldivergence_loss = rcnn_mkl_kldiv_loss(
         pred_multi_mean[:,0,:], pred_multi_mean[:,1,:], 
-        pred_multi_lstd[:,0,:], pred_multi_lstd[:,1,:], 
-        config.kl_weight)
+        pred_multi_lstd[:,0,:], pred_multi_lstd[:,1,:])
 
     loss = objectness_loss * valid_masks + kldivergence_loss * valid_masks + \
             multi_kldivergence_loss * valid_masks
@@ -386,13 +385,13 @@ def mip_vpd_mkl_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     loss = loss.reshape(-1, 2).sum(axis=1)
     return loss.reshape(-1, 1)
 
-def rcnn_mkl_kldiv_loss(pred_mean1, pred_mean2, pred_lstd1, pred_lstd2, kl_weight):
+def rcnn_mkl_kldiv_loss(pred_mean1, pred_mean2, pred_lstd1, pred_lstd2):
     loss0 = (1 + pred_lstd1.mul(2) - pred_lstd2.mul(2) - (pred_lstd1.mul(2).exp() + \
                 (pred_mean1 - pred_mean2).pow(2))/ pred_lstd2.mul(2).exp()).mul(-0.5)
     loss1 = (1 + pred_lstd2.mul(2) - pred_lstd1.mul(2) - (pred_lstd2.mul(2).exp() + \
                 (pred_mean2 - pred_mean1).pow(2))/ pred_lstd1.mul(2).exp()).mul(-0.5)
     loss = torch.cat([loss0, loss1], dim=0)
-    return kl_weight * torch.relu(1-loss.mean(axis=1))
+    return config.kl_weight * torch.relu(config.kl_delta-loss.mean(axis=1))
 
 def refine_loss_softmax(pred_delta, pred_score, targets, labels):
     # reshape

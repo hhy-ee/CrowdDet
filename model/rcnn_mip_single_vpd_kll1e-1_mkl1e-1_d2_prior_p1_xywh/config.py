@@ -104,6 +104,7 @@ class Config:
     
     # ----------vpd config---------- #
     kl_weight = 1e-1
+    kl_delta = 2.0
     prior_std = [0.125, 0.125, 0.35, 0.35]
     plot_type = 'draw_mip_for_set_kl'
     save_data = True
