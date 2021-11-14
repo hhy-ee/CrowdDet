@@ -429,7 +429,7 @@ def mip_pos1_gmvpd_loss_softmax(p_b0, p_b1, targets, labels):
     fg_masks = labels > 0
     fg_mip_idx = torch.where(fg_masks.reshape(-1, 2).sum(dim=1) >= 1)[0]
     fg_mip_masks = fg_masks.reshape(-1, 2).sum(dim=1) >= 1
-    fg_mip_masks = torch.cat([fg_mip_masks, fg_mip_masks])
+    fg_mip_masks = fg_mip_masks.repeat(2).reshape(2, -1).t().reshape(-1)
     # gaussian param
     pred_mean = pred_delta[:, :4]
     pred_lstd = pred_delta[:, 4:8]
@@ -448,10 +448,9 @@ def mip_pos1_gmvpd_loss_softmax(p_b0, p_b1, targets, labels):
 
     # loss for regression
     localization_loss = pred_delta.new_full((pred_delta.shape[0],), INF, dtype=torch.float32)
-    pred_delta = pred_delta[fg_masks, :]
-    localization_loss[fg_masks] = smooth_l1_loss(
-        pred_delta,
-        targets[fg_masks],
+    localization_loss[fg_mip_masks] = smooth_l1_loss(
+        pred_delta[fg_mip_masks],
+        targets[fg_mip_masks],
         config.rcnn_smooth_l1_beta)
     localization_loss = localization_loss.reshape(-1, 2)[fg_mip_idx, :]
     _, min_idx_loc = localization_loss.min(axis=1)
