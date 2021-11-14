@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import mip_loss_focal
+from det_oprs.loss_opr import mip_loss_focal, mip_pos_gmvpd_loss_focal
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -72,14 +72,17 @@ class RetinaNet_Criteria(nn.Module):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, (config.num_classes-1)*2)
         all_pred_cls = torch.sigmoid(all_pred_cls)
-        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4*2)
+        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 9*2)
         # get ground truth
         labels, bbox_targets = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=2)
         all_pred_cls = all_pred_cls.reshape(-1, 2, config.num_classes-1)
-        all_pred_reg = all_pred_reg.reshape(-1, 2, 4)
+        all_pred_reg = all_pred_reg.reshape(-1, 2, 9)
         loss = mip_loss_focal(
-                all_pred_reg[:, 0], all_pred_cls[:, 0],
-                all_pred_reg[:, 1], all_pred_cls[:, 1],
+                all_pred_reg[:, 0, :4], all_pred_cls[:, 0],
+                all_pred_reg[:, 1, :4], all_pred_cls[:, 1],
+                bbox_targets, labels)
+        loss1 = mip_pos_gmvpd_loss_focal(
+                all_pred_reg[:, 0], all_pred_reg[:, 1],
                 bbox_targets, labels)
         del all_anchors
         del all_pred_cls
@@ -91,8 +94,14 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum) * max(num_pos, 1)
         loss_mip = loss_mip.sum() / self.loss_normalizer
+        loss_gm_loc = loss1['loss_loc'].sum() / self.loss_normalizer
+        loss_gm_cat = loss1['loss_cat'].sum() / self.loss_normalizer
+        loss_gm_kld = loss1['loss_kld'].sum() / self.loss_normalizer
         loss_dict = {}
         loss_dict['retina_mip'] = loss_mip
+        loss_dict['retina_gm_loc'] = loss_gm_loc
+        loss_dict['retina_gm_cat'] = loss_gm_cat
+        loss_dict['retina_gm_kld'] = loss_gm_kld
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -118,7 +127,7 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * (config.num_classes-1) * 2,
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
-            in_channels, config.num_cell_anchors * 4 * 2,
+            in_channels, config.num_cell_anchors * 9 * 2,
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
@@ -145,7 +154,7 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, (config.num_classes-1)*2)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4*2)
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 9*2)
             for _ in pred_reg]
         return pred_cls_list, pred_reg_list
 
