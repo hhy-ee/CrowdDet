@@ -153,7 +153,7 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
             top_k = 2
             n = pred_boxes.shape[0]
-            pred_boxes = pred_boxes.reshape(-1, 10)
+            pred_boxes = pred_boxes.reshape(-1, 11)
             idents = np.tile(np.arange(n)[:,None], (1, top_k)).reshape(-1, 1)
             pred_boxes = np.hstack((pred_boxes, idents))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
@@ -198,7 +198,14 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
         result_queue.put_nowait(result_dict)
 
 def boxes_dump(boxes):
-    if boxes.shape[-1] == 11:
+    if boxes.shape[-1] == 12:
+        result = [{'box':[round(i, 1) for i in box[:4].tolist()],
+                   'score':round(float(box[4]), 5),
+                   'tag':int(box[5]),
+                   'mip_data':float(box[6]),
+                   'lstd':float(box[7:11].mean()),
+                   'proposal_num':int(box[11])} for box in boxes]
+    elif boxes.shape[-1] == 11:
         result = [{'box':[round(i, 1) for i in box[:4].tolist()],
                    'score':round(float(box[4]), 5),
                    'tag':int(box[5]),

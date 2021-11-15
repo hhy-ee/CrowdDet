@@ -73,6 +73,7 @@ def set_cpu_kl_nms(dets, thresh):
     dets = dets[order]
 
     numbers = dets[:, -1]
+    probs = dets[:, 6]
     keep = np.ones(len(dets)) == 1
     ruler = np.arange(len(dets))
     while ruler.size>0:
@@ -83,12 +84,13 @@ def set_cpu_kl_nms(dets, thresh):
         overlap = _overlap(dets[:, :4], basement, ruler)
         indices = np.where(overlap > thresh)[0]
         loc = np.where(numbers[ruler][indices] == num)[0]
-        if loc.shape[0] != 0:
-            a = 1
         # the mask won't change in the step
         mask = keep[ruler[indices][loc]]#.copy()
         keep[ruler[indices]] = False
         keep[ruler[indices][loc][mask]] = True
+        if loc.shape[0] != 0:
+            if np.abs(probs[basement] - probs[ruler[indices][loc]]) < 0.01:
+                keep[ruler[indices][loc][mask]] = False
         ruler[~keep[ruler]] = -1
         ruler = ruler[ruler>0]
     keep = keep[np.argsort(order)]

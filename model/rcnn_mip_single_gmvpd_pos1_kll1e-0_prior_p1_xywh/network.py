@@ -105,14 +105,16 @@ class RCNN(nn.Module):
             tag = tag.repeat(pred_cls_0.shape[0], 1).reshape(-1,1)
             pred_scores_0 = F.softmax(pred_cls_0, dim=-1)[:, 1:].reshape(-1, 1)
             pred_scores_1 = F.softmax(pred_cls_1, dim=-1)[:, 1:].reshape(-1, 1)
-            pred_lstd_0 = pred_delta_0.reshape(-1,2,9)[:, 1, 4:8]
-            pred_lstd_1 = pred_delta_1.reshape(-1,2,9)[:, 1, 4:8]
-            pred_delta_0 = pred_delta_0.reshape(-1,2,9)[:, 1, :4]
-            pred_delta_1 = pred_delta_1.reshape(-1,2,9)[:, 1, :4]
+            pred_lstd_0 = pred_delta_0.reshape(-1,9)[:, 4:8]
+            pred_lstd_1 = pred_delta_1.reshape(-1,9)[:, 4:8]
+            pred_logit_0 = pred_delta_0.reshape(-1,9)[:, 8:9]
+            pred_logit_1 = pred_delta_1.reshape(-1,9)[:, 8:9]
+            pred_delta_0 = pred_delta_0.reshape(-1,9)[:, :4]
+            pred_delta_1 = pred_delta_1.reshape(-1,9)[:, :4]
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox_0 = restore_bbox(base_rois, pred_delta_0, True)
             pred_bbox_1 = restore_bbox(base_rois, pred_delta_1, True)
-            if 'kl' not in  config.test_nms_method:
+            if 'kl' not in config.test_nms_method:
                 pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag], axis=1)
                 pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag], axis=1)
             else:
@@ -126,13 +128,10 @@ class RCNN(nn.Module):
                 scale = torch.tensor(config.prior_std).type_as(pred_lstd_0)
                 pred_scale_lstd_0 = pred_lstd_0.exp().mul(scale).log()
                 pred_scale_lstd_1 = pred_lstd_1.exp().mul(scale).log()
-                pred_mip_kld_0 = (1 + pred_scale_lstd_0.mul(2) - pred_delta_0.pow(2) - \
-                                    pred_scale_lstd_0.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
-                pred_mip_kld_1 = (1 + pred_scale_lstd_1.mul(2) - pred_delta_1.pow(2) - \
-                                    pred_scale_lstd_1.mul(2).exp()).mul(-0.5).mean(dim=1, keepdim=True)
-
-                pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_mip_kld_0, pred_lstd_0], axis=1)
-                pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_mip_kld_1, pred_lstd_1], axis=1)
+                pred_prob = F.softmax(torch.cat([pred_logit_0, pred_logit_1], dim=1), dim=1) 
+                pred_prob_0, pred_prob_1 = torch.split(pred_prob, 1, dim=1)
+                pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_prob_0, pred_scale_lstd_0], axis=1)
+                pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_prob_1, pred_scale_lstd_1], axis=1)
             pred_bbox = torch.cat((pred_bbox_0, pred_bbox_1), axis=1)
             return pred_bbox
 

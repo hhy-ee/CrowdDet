@@ -58,7 +58,7 @@ class Config:
 
     # ----------test config---------- #
     test_nms = 0.5
-    test_nms_method = 'set_kl_nms'
+    test_nms_method = 'set_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -100,13 +100,6 @@ class Config:
     rcnn_bbox_normalize_targets = True
     bbox_normalize_means = np.array([0, 0, 0, 0])
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
-    save_data = False
-    
-    # ----------vpd config---------- #
-    kl_weight = 1.0
-    gumbel_temperature = 1.0
-    prior_std = [0.125, 0.125, 0.35, 0.35]
-    plot_type = 'draw_mip_for_set_kl'
     save_data = False
 
 config = Config()

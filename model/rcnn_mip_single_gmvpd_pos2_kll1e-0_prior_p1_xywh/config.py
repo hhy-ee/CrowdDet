@@ -58,7 +58,7 @@ class Config:
 
     # ----------test config---------- #
     test_nms = 0.5
-    test_nms_method = 'set_kl_nms'
+    test_nms_method = 'set_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 

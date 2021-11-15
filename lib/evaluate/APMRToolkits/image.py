@@ -56,7 +56,9 @@ class Image(object):
             elif self.eval_mode == 4:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num')
             elif self.eval_mode == 5:
-                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'mip_kld', 'proposal_num')
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'mip_data', 'proposal_num')
+            elif self.eval_mode == 6:
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'mip_data', 'lstd', 'proposal_num')
             else:
                 raise Exception('Unknown evaluation mode!')
 
@@ -293,7 +295,7 @@ class Image(object):
         body_bbox[:, 2:4] += body_bbox[:, :2]
         return body_bbox, head_bbox
 
-    def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None, key_ex=None):
+    def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None, key_ex=None, key_ex1=None):
         assert key_name in dict_input
         if len(dict_input[key_name]) < 1:
             return np.empty([0, 5])
@@ -308,7 +310,10 @@ class Image(object):
         if key_score:
             if key_tag:
                 if key_ex:
-                    bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag], rb[key_ex])) for rb in dict_input[key_name]])
+                    if key_ex1:
+                        bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag], rb[key_ex], rb[key_ex1])) for rb in dict_input[key_name]])
+                    else:
+                        bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag], rb[key_ex])) for rb in dict_input[key_name]])
                 else:
                     bboxes = np.vstack([np.hstack((rb[key_box], rb[key_score], rb[key_tag])) for rb in dict_input[key_name]])
             else:
