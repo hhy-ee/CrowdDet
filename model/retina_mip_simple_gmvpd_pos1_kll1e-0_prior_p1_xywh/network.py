@@ -166,7 +166,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num*2)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 4*2)
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 9*2)
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
@@ -186,8 +186,8 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
     pred_scores_0 = keep_cls[:, :class_num].reshape(-1, 1)
     pred_scores_1 = keep_cls[:, class_num:].reshape(-1, 1)
-    pred_delta_0 = keep_reg[:, :4]
-    pred_delta_1 = keep_reg[:, 4:]
+    pred_delta_0 = keep_reg.reshape(-1,2,9)[:, 0, :4]
+    pred_delta_1 = keep_reg.reshape(-1,2,9)[:, 1, 4:8]
     pred_bbox_0 = restore_bbox(keep_anchors, pred_delta_0, False)
     pred_bbox_1 = restore_bbox(keep_anchors, pred_delta_1, False)
     pred_bbox_0 = pred_bbox_0.repeat(1, class_num).reshape(-1, 4)
