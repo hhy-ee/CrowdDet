@@ -59,7 +59,7 @@ class Config:
     # ----------test config---------- #
     test_layer_topk = 1000
     test_nms = 0.5
-    test_nms_method = 'normal_nms'
+    test_nms_method = 'set_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -69,8 +69,10 @@ class Config:
 
     # --------anchor generator config-------- #
     anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
-    anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
-    anchor_aspect_ratios = [1, 2, 3]
+    # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
+    # anchor_aspect_ratios = [1, 2, 3]
+    anchor_base_scale = [2**0]
+    anchor_aspect_ratios = [2]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
@@ -79,5 +81,10 @@ class Config:
     positive_thresh = 0.5
     allow_low_quality = True
     save_data = False
+
+    # ---------gmvpd-------------------------------#
+    kl_weight = 1.0
+    gumbel_temperature = 1.0
+    prior_std = [0.125, 0.125, 0.35, 0.35]
 
 config = Config()
