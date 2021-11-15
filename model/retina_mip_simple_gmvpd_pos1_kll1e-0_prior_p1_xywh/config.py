@@ -82,4 +82,9 @@ class Config:
     allow_low_quality = True
     save_data = False
 
+    # ---------gmvpd-------------------------------#
+    kl_weight = 1.0
+    gumbel_temperature = 1.0
+    prior_std = [0.125, 0.125, 0.35, 0.35]
+
 config = Config()
