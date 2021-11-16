@@ -261,6 +261,31 @@ def mip_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     loss = loss.reshape(-1, 2).sum(axis=1)
     return loss.reshape(-1, 1)
 
+def mip_loss_softmax_reg(p_b0, p_s0, p_b1, p_s1, targets, labels):
+    # reshape
+    pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
+    pred_score = torch.cat([p_s0, p_s1], axis=1).reshape(-1, p_s0.shape[-1])
+    targets = targets.reshape(-1, 4)
+    labels = labels.long().flatten()
+    # cons masks
+    valid_masks = labels >= 0
+    fg_masks = labels > 0
+    # multiple class
+    pred_delta = pred_delta.reshape(pred_delta.shape[0], config.num_classes, -1)
+    fg_gt_classes = labels[fg_masks]
+    pred_delta = pred_delta[fg_masks, fg_gt_classes, :4]
+    # loss for regression
+    localization_loss = smooth_l1_loss(
+        pred_delta,
+        targets[fg_masks],
+        config.rcnn_smooth_l1_beta)
+    # loss for classification
+    loss = pred_score.new_full((pred_score.shape[0],), 0, dtype=torch.float32)
+    loss = loss * valid_masks
+    loss[fg_masks] = loss[fg_masks] + localization_loss
+    loss = loss.reshape(-1, 2).sum(axis=1)
+    return loss.reshape(-1, 1)
+
 def mip_2xreg_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     # reshape
     pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
