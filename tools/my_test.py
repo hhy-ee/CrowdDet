@@ -64,7 +64,7 @@ def eval_all(args, config, network):
     # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     # for line in res_line:
     #     eval_fid.write(line+'\n')
-    AP, MR, scorelist, pltscrlist = compute_APMR.compute_my_APMR(4, fpath, config.eval_source, 'box', len_dataset)
+    AP, MR, scorelist, pltscrlist = compute_APMR.compute_my_APMR(5, fpath, config.eval_source, 'box', len_dataset)
     if config.save_data and 'set' not in config.test_nms_method:
         save_data(scorelist, len_dataset)
     elif config.save_data and 'set' in config.test_nms_method:
@@ -236,9 +236,10 @@ def save_set_data(scorelist, len_dataset):
     for i in range(len_dataset):
         result = scorelist[i]
         boxes_scr = np.array([r[0][4] for r in result])
-        # boxes_prob = np.array([r[0][5] for r in result])
         boxes_lstd = np.array([r[0][5] for r in result])
         boxes_num = np.array([r[0][6] for r in result])
+        boxes_prob = np.array([r[0][7] for r in result])
+
         is_tp = np.array([r[1] for r in result])
         ruler = np.arange(len(boxes_num))
         while ruler.size>0:
@@ -249,8 +250,8 @@ def save_set_data(scorelist, len_dataset):
                 # data = np.concatenate([boxes_scr[basement, None], boxes_lstd[basement, None], is_tp[basement, None], \
                 #     boxes_scr[ruler[loc]], boxes_lstd[ruler[loc]], is_tp[ruler[loc]]], axis=0).reshape(1, -1)
 
-                data = np.concatenate([boxes_scr[basement, None], boxes_lstd[basement, None], is_tp[basement, None], \
-                    boxes_scr[ruler[loc]], boxes_lstd[ruler[loc]], is_tp[ruler[loc]]], axis=0).reshape(1, -1)
+                data = np.concatenate([boxes_scr[basement, None], boxes_prob[basement, None], is_tp[basement, None], \
+                    boxes_scr[ruler[loc]], boxes_prob[ruler[loc]], is_tp[ruler[loc]]], axis=0).reshape(1, -1)
 
                 # tp = is_tp[ruler[loc]] + is_tp[basement, None]
                 # kld = (boxes_kld[ruler[loc]] + boxes_kld[basement, None]) / 2

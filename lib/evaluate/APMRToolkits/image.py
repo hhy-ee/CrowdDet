@@ -56,9 +56,7 @@ class Image(object):
             elif self.eval_mode == 4:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num')
             elif self.eval_mode == 5:
-                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'mip_data', 'proposal_num')
-            elif self.eval_mode == 6:
-                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'mip_data', 'lstd', 'proposal_num')
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num', 'mip_data')
             else:
                 raise Exception('Unknown evaluation mode!')
 

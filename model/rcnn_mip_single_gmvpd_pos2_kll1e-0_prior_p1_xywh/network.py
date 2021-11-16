@@ -127,8 +127,10 @@ class RCNN(nn.Module):
                 scale = torch.tensor(config.prior_std).type_as(pred_lstd_0)
                 pred_scale_lstd_0 = pred_lstd_0.exp().mul(scale).log()
                 pred_scale_lstd_1 = pred_lstd_1.exp().mul(scale).log()
-                pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_scale_lstd_0], axis=1)
-                pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_scale_lstd_1], axis=1)
+                pred_scr = torch.cat([pred_scores_0, pred_scores_1], dim=1)
+                pred_prob_0, pred_prob_1 = torch.split(F.softmax(pred_scr, dim=1), 1, dim=1)
+                pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_prob_0, pred_scale_lstd_0], axis=1)
+                pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_prob_1, pred_scale_lstd_1], axis=1)
             pred_bbox = torch.cat((pred_bbox_0, pred_bbox_1), axis=1)
             return pred_bbox
 
