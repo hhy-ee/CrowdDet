@@ -88,9 +88,9 @@ def set_cpu_kl_nms(dets, thresh):
         mask = keep[ruler[indices][loc]]#.copy()
         keep[ruler[indices]] = False
         keep[ruler[indices][loc][mask]] = True
-        if loc.shape[0] != 0:
-            if np.abs(probs[basement] - probs[ruler[indices][loc]]) < 0.01:
-                keep[ruler[indices][loc][mask]] = False
+        # if loc.shape[0] != 0:
+        #     if np.abs(probs[basement] - probs[ruler[indices][loc]]) < 0.01:
+        #         keep[ruler[indices][loc][mask]] = False
         ruler[~keep[ruler]] = -1
         ruler = ruler[ruler>0]
     keep = keep[np.argsort(order)]
