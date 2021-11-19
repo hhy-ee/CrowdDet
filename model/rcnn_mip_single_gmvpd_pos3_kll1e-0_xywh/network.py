@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import mip_normal1_loss_softmax, mip_pos3_gmvpd_loss_softmax
+from det_oprs.loss_opr import mip_normal2_loss_softmax, mip_pos3_gmvpd_loss_softmax
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -84,7 +84,7 @@ class RCNN(nn.Module):
         pred_cls_1 = self.pred_cls_1(flatten_feature)
         pred_delta_1 = self.pred_delta_1(flatten_feature)
         if self.training:
-            loss0 = mip_normal1_loss_softmax(
+            loss0 = mip_normal2_loss_softmax(
                         pred_delta_0, pred_cls_0,
                         pred_delta_1, pred_cls_1,
                         bbox_targets, labels)
