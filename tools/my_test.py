@@ -205,7 +205,7 @@ def run_test():
     # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh', 
     #                           '--resume_weights', '38'])
     args = parser.parse_args(['--model_dir', 'rcnn_mip_single_gmvpd_pos2_kll1e-0_prior_p1_xywh', 
-                              '--resume_weights', '29'])
+                              '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

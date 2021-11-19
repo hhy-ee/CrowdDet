@@ -571,6 +571,66 @@ def mip_pos3_gmvpd_loss_softmax(p_b0, p_b1, targets, labels):
     loss['loss_kld'] = kldivergence_loss.sum() / len(p_b0)
     return loss
 
+def mip_pos4_gmvpd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):    
+    # reshape
+    pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
+    pred_score = torch.cat([p_s0, p_s1], axis=1).reshape(-1, p_s0.shape[-1])
+    targets = targets.reshape(-1, 4)
+    labels = labels.long().flatten()
+    # cons masks
+    valid_masks = labels >= 0
+    fg_masks = labels > 0
+    fg_mip_idx = torch.where(fg_masks.reshape(-1, 2).sum(dim=1) >= 1)[0]
+    fg_mip_masks = fg_masks.reshape(-1, 2).sum(dim=1) >= 1
+    fg_mip_masks = fg_mip_masks.repeat(2).reshape(2, -1).t().reshape(-1)
+    # gaussian param
+    pred_mean = pred_delta[:, :4]
+    pred_lstd = pred_delta[:, 4:8]
+    pred_prob = pred_delta[:, 8:9]
+    # gaussian variational inference
+    mip_targets = targets.reshape(-1, 2, 4) 
+    scale = torch.abs(mip_targets[:, 0] - mip_targets[:, 1]) / 4
+    scale = scale.repeat(1, 2).reshape(-1, 4)
+    pred_scale_std = pred_lstd.exp().mul(scale)
+    pred_delta = pred_mean + pred_scale_std * torch.randn_like(pred_mean)
+    # gumble mixture
+    pred_prob = pred_prob.reshape(-1, 2, 1)
+    pred_delta = pred_delta.reshape(-1, 2, 4)
+    gumbel_sample = -torch.log(-torch.log(torch.rand_like(pred_prob) + 1e-10) + 1e-10)
+    weight = F.softmax((gumbel_sample + pred_prob) / config.gumbel_temperature, dim=1)
+    pred_delta = torch.sum(pred_delta.mul(weight), dim=1, keepdim=True)
+    pred_delta = pred_delta.repeat(1, 2, 1).reshape(-1, 4)
+
+    # loss for classification
+    objectness_loss = softmax_loss(pred_score, labels) * valid_masks
+    objectness_loss = objectness_loss.reshape(-1, 2).sum(axis=1)
+
+    # loss for regression
+    localization_loss = pred_delta.new_full((pred_delta.shape[0],), INF, dtype=torch.float32)
+    localization_loss[fg_mip_masks] = smooth_l1_loss(
+        pred_delta[fg_mip_masks],
+        targets[fg_mip_masks],
+        config.rcnn_smooth_l1_beta)
+    localization_loss = localization_loss.reshape(-1, 2)[fg_mip_idx, :]
+    _, min_idx_loc = localization_loss.min(axis=1)
+    localization_loss = localization_loss[torch.arange(localization_loss.shape[0]), min_idx_loc]
+
+    # loss for category
+    pred_prob = pred_prob.reshape(-1,2)[fg_mip_idx, :]
+    categorical_loss = -entropy_loss(pred_prob) + 0.693147
+
+    # loss for KL
+    kldivergence_loss = rcnn_kldiv_loss(pred_mean[fg_mip_masks, :], pred_lstd[fg_mip_masks, :],
+                        config.kl_weight).reshape(-1, 2).mean(dim=1)
+
+    # all loss
+    loss= {}
+    loss['loss_cls'] = objectness_loss.sum() / len(p_b0)
+    loss['loss_loc'] = localization_loss.sum() / len(p_b0)
+    loss['loss_cat'] = categorical_loss.sum() / len(p_b0)
+    loss['loss_kld'] = kldivergence_loss.sum() / len(p_b0)
+    return loss
+
 def entropy_loss(logits):
     log_q = F.log_softmax(logits, dim=1)
     q = F.softmax(logits, dim=1)

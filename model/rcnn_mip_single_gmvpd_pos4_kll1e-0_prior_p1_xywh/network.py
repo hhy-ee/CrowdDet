@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import mip_normal1_loss_softmax, mip_pos2_gmvpd_loss_softmax
+from det_oprs.loss_opr import mip_pos4_gmvpd_loss_softmax
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -61,9 +61,9 @@ class RCNN(nn.Module):
             nn.init.constant_(l.bias, 0)
         # box predictor
         self.pred_cls_0 = nn.Linear(1024, config.num_classes)
-        self.pred_delta_0 = nn.Linear(1024, (config.num_classes-1) * 8)
+        self.pred_delta_0 = nn.Linear(1024, (config.num_classes-1) * 9)
         self.pred_cls_1 = nn.Linear(1024, config.num_classes)
-        self.pred_delta_1 = nn.Linear(1024, (config.num_classes-1) * 8)
+        self.pred_delta_1 = nn.Linear(1024, (config.num_classes-1) * 9)
         for l in [self.pred_cls_0, self.pred_cls_1]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
@@ -84,18 +84,12 @@ class RCNN(nn.Module):
         pred_cls_1 = self.pred_cls_1(flatten_feature)
         pred_delta_1 = self.pred_delta_1(flatten_feature)
         if self.training:
-            loss0 = mip_normal1_loss_softmax(
+            loss1 = mip_pos4_gmvpd_loss_softmax(
                         pred_delta_0, pred_cls_0,
-                        pred_delta_1, pred_cls_1,
-                        bbox_targets, labels)
-            loss1 = mip_pos2_gmvpd_loss_softmax(
-                        pred_delta_0, pred_cls_0,
-                        pred_delta_1, pred_cls_1,
+                        pred_delta_1, pred_cls_1, 
                         bbox_targets, labels)
             # requires_grad = False
-            loss_mip = loss0.mean()
             loss_dict = {}
-            loss_dict['loss_rcnn_mip'] = loss_mip
             loss_dict['loss_rcnn_gmvpd_loc'] = loss1['loss_loc']
             loss_dict['loss_rcnn_gmvpd_cat'] = loss1['loss_cat']
             loss_dict['loss_rcnn_gmvpd_kld'] = loss1['loss_kld']
@@ -106,10 +100,12 @@ class RCNN(nn.Module):
             tag = tag.repeat(pred_cls_0.shape[0], 1).reshape(-1,1)
             pred_scores_0 = F.softmax(pred_cls_0, dim=-1)[:, 1:].reshape(-1, 1)
             pred_scores_1 = F.softmax(pred_cls_1, dim=-1)[:, 1:].reshape(-1, 1)
-            pred_lstd_0 = pred_delta_0.reshape(-1,8)[:, 4:]
-            pred_lstd_1 = pred_delta_1.reshape(-1,8)[:, 4:]
-            pred_delta_0 = pred_delta_0.reshape(-1,8)[:, :4]
-            pred_delta_1 = pred_delta_1.reshape(-1,8)[:, :4]
+            pred_lstd_0 = pred_delta_0.reshape(-1,9)[:, 4:8]
+            pred_lstd_1 = pred_delta_1.reshape(-1,9)[:, 4:8]
+            pred_logit_0 = pred_delta_0.reshape(-1,9)[:, 8:9]
+            pred_logit_1 = pred_delta_1.reshape(-1,9)[:, 8:9]
+            pred_delta_0 = pred_delta_0.reshape(-1,9)[:, :4]
+            pred_delta_1 = pred_delta_1.reshape(-1,9)[:, :4]
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox_0 = restore_bbox(base_rois, pred_delta_0, True)
             pred_bbox_1 = restore_bbox(base_rois, pred_delta_1, True)
@@ -127,8 +123,8 @@ class RCNN(nn.Module):
                 scale = torch.tensor(config.prior_std).type_as(pred_lstd_0)
                 pred_scale_lstd_0 = pred_lstd_0.exp().mul(scale).log()
                 pred_scale_lstd_1 = pred_lstd_1.exp().mul(scale).log()
-                pred_scr = torch.cat([pred_cls_0[:, 1:], pred_cls_1[:, 1:]], dim=1)
-                pred_prob_0, pred_prob_1 = torch.split(F.softmax(pred_scr, dim=1), 1, dim=1)
+                pred_prob = F.softmax(torch.cat([pred_logit_0, pred_logit_1], dim=1), dim=1) 
+                pred_prob_0, pred_prob_1 = torch.split(pred_prob, 1, dim=1)
                 pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_prob_0, pred_scale_lstd_0], axis=1)
                 pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_prob_1, pred_scale_lstd_1], axis=1)
             pred_bbox = torch.cat((pred_bbox_0, pred_bbox_1), axis=1)
