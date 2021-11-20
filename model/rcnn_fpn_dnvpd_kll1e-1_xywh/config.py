@@ -58,7 +58,7 @@ class Config:
 
     # ----------test config---------- #
     test_nms = 0.5
-    test_nms_method = 'set_nms'
+    test_nms_method = 'normal_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -76,7 +76,7 @@ class Config:
     anchor_within_border = False
 
     rpn_min_box_size = 2
-    rpn_nms_threshold = 0.7
+    rpn_nms_threshold = 0.5
     train_prev_nms_top_n = 12000
     train_post_nms_top_n = 2000
     test_prev_nms_top_n = 6000
@@ -94,19 +94,18 @@ class Config:
 
     num_rois = 512
     fg_ratio = 0.5
-    fg_threshold = 0.5
+    fg_threshold = 0.6
     bg_threshold_high = 0.5
     bg_threshold_low = 0.0
     rcnn_bbox_normalize_targets = True
     bbox_normalize_means = np.array([0, 0, 0, 0])
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
-    save_data = False
-    
-    # ----------vpd config---------- #
-    kl_weight = 1.0
-    gumbel_temperature = 1.0
-    plot_type = 'draw_mip_for_set_kl'
-    save_data = False
 
+    # ----------vpd config---------- #
+    kl_weight = 1e-1
+    gumbel_temperature = 1.0
+    xy_project = np.linspace(-1, 1, 21)[None, :]
+    wh_project = np.linspace(-0.7, 0.7, 21)[None, :]
+    save_data = False
 config = Config()
 
