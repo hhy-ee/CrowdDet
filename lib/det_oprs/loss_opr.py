@@ -94,7 +94,7 @@ def dfl_xywh_loss(pred, target, beta: float):
     weight_right = target - dis_left.float()
     loss = F.cross_entropy(pred, dis_left, reduction='none') * weight_left \
         + F.cross_entropy(pred, dis_right, reduction='none') * weight_right
-    return loss.reshape(-1, 4).sum(axis=1)
+    return loss.reshape(-1, 4).sum(dim=1)
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
     class_range = torch.arange(1, inputs.shape[1] + 1, device=inputs.device)
