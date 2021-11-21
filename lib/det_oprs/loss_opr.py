@@ -83,6 +83,19 @@ def smooth_l1_loss(pred, target, beta: float):
         loss = torch.where(in_mask, 0.5 * abs_x ** 2 / beta, abs_x - 0.5 * beta)
     return loss.sum(axis=1)
 
+def dfl_xywh_loss(pred, target, beta: float):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    pred = pred.reshape(-1, pred.shape[-1])
+    target = target.reshape(-1) * scale + scale
+    target = target.clamp(min=0, max=2*scale)
+    dis_left = target.long()
+    dis_right = dis_left + 1
+    weight_left = dis_right.float() - target
+    weight_right = target - dis_left.float()
+    loss = F.cross_entropy(pred, dis_left, reduction='none') * weight_left \
+        + F.cross_entropy(pred, dis_right, reduction='none') * weight_right
+    return loss.reshape(-1, 4).sum(axis=1)
+
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
     class_range = torch.arange(1, inputs.shape[1] + 1, device=inputs.device)
     pos_pred = (1 - inputs) ** gamma * torch.log(inputs + eps)
