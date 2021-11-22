@@ -83,7 +83,7 @@ class Config:
     save_data = False
 
     # ----------freeanchor config---------- #
-    kl_weight = 0
+    kl_weight = 1.0
     prior_std = [0.125, 0.125, 0.35, 0.35]
     gumbel_temperature = 1.0
     xy_project = np.linspace(-1, 1, 21)[None, :]
