@@ -93,7 +93,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_cat = torch.abs(entropy_loss(all_pred_reg).mean(dim=1)) * config.kl_weight
+        loss_cat = torch.abs(entropy_loss(all_pred_reg[fg_mask]).mean(dim=1)) * config.kl_weight
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
