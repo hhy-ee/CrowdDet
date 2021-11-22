@@ -82,7 +82,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_delta = gumbel_weight.mul(project).sum(dim=2)
         # get ground truth
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_delta, gt_boxes, im_info)
-        loss_cat = (-entropy_loss(all_pred_reg).mean()  + 3.0445) * config.kl_weight
+        loss_cat = entropy_loss(all_pred_reg).mean() * config.kl_weight
         loss_dict['freeanchor_cat_loss'] = loss_cat
         return loss_dict
 

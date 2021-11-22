@@ -61,7 +61,7 @@ class RCNN(nn.Module):
             nn.init.constant_(l.bias, 0)
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
-        self.pred_delta = nn.Linear(1024, config.num_classes * 4 * 21)
+        self.pred_delta = nn.Linear(1024, 4 * 21)
         for l in [self.pred_cls]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
@@ -85,16 +85,15 @@ class RCNN(nn.Module):
             fg_masks = labels > 0
             valid_masks = labels >= 0
             # multi class
-            pred_ddist = pred_delta.reshape(-1, config.num_classes, 4, 21)
+            pred_ddist = pred_delta.reshape(-1, 4, 21)
 
             # variational inference
             gumbel_sample = -torch.log(-torch.log(torch.rand_like(pred_ddist) + 1e-10) + 1e-10)
-            gumbel_weight = F.softmax((gumbel_sample + pred_ddist) / config.gumbel_temperature, dim=3)
+            gumbel_weight = F.softmax((gumbel_sample + pred_ddist) / config.gumbel_temperature, dim=2)
             project = torch.tensor(config.project).type_as(pred_ddist).repeat(4, 1)
-            pred_delta = gumbel_weight.mul(project).sum(dim=3)
-            fg_gt_classes = labels[fg_masks]
-            pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
-            pred_ddist = pred_ddist[fg_masks, fg_gt_classes, :]
+            pred_delta = gumbel_weight.mul(project).sum(dim=2)
+            pred_delta = pred_delta[fg_masks, :]
+            pred_ddist = pred_ddist[fg_masks, :]
 
             # loss for regression
             localization_loss = smooth_l1_loss(
@@ -124,10 +123,9 @@ class RCNN(nn.Module):
             tag = torch.arange(class_num).type_as(pred_cls)+1
             tag = tag.repeat(pred_cls.shape[0], 1).reshape(-1,1)
             pred_scores = F.softmax(pred_cls, dim=-1)[:, 1:].reshape(-1, 1)
-            pred_delta = pred_delta.reshape(-1, config.num_classes, 4, 21)[:, 1]
-            weight = F.softmax(pred_delta, dim=2)
-            project = torch.tensor(np.vstack([config.xy_project, config.xy_project, \
-                    config.wh_project, config.wh_project])).type_as(pred_delta)
+            pred_ddist = pred_delta.reshape(-1, 4, 21)
+            weight = F.softmax(pred_ddist, dim=2)
+            project = torch.tensor(config.project).type_as(pred_ddist).repeat(4, 1)
             pred_delta = weight.mul(project).sum(dim=2)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)

@@ -88,9 +88,9 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
-    kl_weight = 1.0
+    kl_weight = 1e-1
     prior_std = [0.125, 0.125, 0.35, 0.35]
     gumbel_temperature = 1.0
-    xy_project = np.linspace(-2, 2, 21)[None, :]
-    wh_project = np.linspace(-1.4, 1.4, 21)[None, :]
+    xy_project = np.linspace(-1, 1, 21)[None, :]
+    wh_project = np.linspace(-0.7, 0.7, 21)[None, :]
 config = Config()

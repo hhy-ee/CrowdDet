@@ -174,8 +174,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
         pred_reg = pred_reg_list[l_id][0].reshape(-1, 4, 21)
         weight = F.softmax(pred_reg, dim=2)
-        project = torch.tensor(np.vstack([config.xy_project, config.xy_project, \
-                    config.wh_project, config.wh_project])).type_as(pred_reg)
+        project = torch.tensor(config.project).type_as(pred_reg).repeat(4, 1)
         pred_reg = weight.mul(project).sum(dim=2)
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
