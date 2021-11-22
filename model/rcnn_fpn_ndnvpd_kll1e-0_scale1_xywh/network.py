@@ -126,8 +126,7 @@ class RCNN(nn.Module):
             pred_scores = F.softmax(pred_cls, dim=-1)[:, 1:].reshape(-1, 1)
             pred_delta = pred_delta.reshape(-1, config.num_classes, 4, 21)[:, 1]
             weight = F.softmax(pred_delta, dim=2)
-            project = torch.tensor(np.vstack([config.xy_project, config.xy_project, \
-                    config.wh_project, config.wh_project])).type_as(pred_delta)
+            project = torch.tensor(config.project).type_as(pred_delta).repeat(4, 1)
             pred_delta = weight.mul(project).sum(dim=2)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
