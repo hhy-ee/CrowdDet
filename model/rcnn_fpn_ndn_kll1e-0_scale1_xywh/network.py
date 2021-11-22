@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, dfl_xywh_loss
+from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, entropy_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -89,7 +89,8 @@ class RCNN(nn.Module):
 
             # variational inference
             gumbel_weight = F.softmax(pred_ddist, dim=2)
-            project = torch.tensor(config.project).type_as(pred_ddist).repeat(4, 1)
+            project = torch.tensor(np.vstack([config.xy_project, config.xy_project, \
+                    config.wh_project, config.wh_project])).type_as(pred_delta)
             pred_delta = gumbel_weight.mul(project).sum(dim=2)
             pred_delta = pred_delta[fg_masks, :]
             pred_ddist = pred_ddist[fg_masks, :]
@@ -99,11 +100,9 @@ class RCNN(nn.Module):
                 pred_delta,
                 bbox_targets[fg_masks],
                 config.rcnn_smooth_l1_beta)
-            # distribution_loss 
-            distribution_loss = dfl_xywh_loss(
-                pred_ddist, 
-                bbox_targets[fg_masks],
-                config.kl_weight)
+            # loss for distribution
+            categotical_loss = (-entropy_loss(pred_ddist[fg_masks]). \
+                mean(dim=1) + 3.0445) * config.kl_weight
             # loss for classification
             objectness_loss = softmax_loss(pred_cls, labels)
             objectness_loss = objectness_loss * valid_masks
@@ -111,11 +110,11 @@ class RCNN(nn.Module):
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer
             loss_rcnn_cls = objectness_loss.sum() * normalizer
-            loss_rcnn_dis = distribution_loss.sum() * normalizer
+            loss_rcnn_cat = categotical_loss.sum() * normalizer
             loss_dict = {}
             loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
             loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
-            loss_dict['loss_rcnn_dis'] = loss_rcnn_dis
+            loss_dict['loss_rcnn_cat'] = loss_rcnn_cat
             return loss_dict
         else:
             class_num = pred_cls.shape[-1] - 1
@@ -124,7 +123,8 @@ class RCNN(nn.Module):
             pred_scores = F.softmax(pred_cls, dim=-1)[:, 1:].reshape(-1, 1)
             pred_ddist = pred_delta.reshape(-1, 4, 21)
             weight = F.softmax(pred_ddist, dim=2)
-            project = torch.tensor(config.project).type_as(pred_ddist).repeat(4, 1)
+            project = torch.tensor(np.vstack([config.xy_project, config.xy_project, \
+                    config.wh_project, config.wh_project])).type_as(pred_delta)
             pred_delta = weight.mul(project).sum(dim=2)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)

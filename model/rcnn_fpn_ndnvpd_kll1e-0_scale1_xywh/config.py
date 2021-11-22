@@ -104,7 +104,8 @@ class Config:
     # ----------vpd config---------- #
     kl_weight = 1.0
     gumbel_temperature = 1.0
-    project = np.linspace(-1, 1, 21)[None, :]
+    xy_project = np.linspace(-1, 1, 21)[None, :]
+    wh_project = np.linspace(-0.7, 0.7, 21)[None, :]
     save_data = False
 config = Config()
 
