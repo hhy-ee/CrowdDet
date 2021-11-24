@@ -105,6 +105,7 @@ class Config:
     kl_weight = 1.0
     gumbel_temperature = 1.0
     project = np.linspace(-1, 1, 21)[None, :]
+    add_gt_proposals = False
     save_data = False
 config = Config()
 
