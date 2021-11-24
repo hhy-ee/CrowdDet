@@ -76,6 +76,7 @@ class RetinaNet_Criteria(nn.Module):
         # variational inference
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(all_pred_reg) + 1e-10) + 1e-10)
         gumbel_weight = F.softmax((gumbel_sample + all_pred_reg) / config.gumbel_temperature, dim=2)
+        weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(np.vstack([config.xy_project, config.xy_project, \
                     config.wh_project, config.wh_project])).type_as(all_pred_reg)
         all_pred_delta = gumbel_weight.mul(project).sum(dim=2)
@@ -93,7 +94,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_cat = torch.abs(entropy_loss(all_pred_reg[fg_mask]).mean(dim=1)) * config.kl_weight
+        loss_cat = torch.abs(entropy_loss(weight[fg_mask]).mean(dim=1)) * config.kl_weight
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
