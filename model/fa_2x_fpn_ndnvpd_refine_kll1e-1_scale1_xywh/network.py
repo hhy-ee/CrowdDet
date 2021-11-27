@@ -121,7 +121,8 @@ class RetinaNet_Head(nn.Module):
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
-        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, self.bbox_pred, self.reg_conf]:
+        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
+                        self.bbox_pred, self.reg_conf]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
