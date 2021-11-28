@@ -16,10 +16,7 @@ def fpn_roi_target(rpn_rois, im_info, gt_boxes, top_k=1):
         batch_inds = torch.ones((gt_boxes_perimg.shape[0], 1)).type_as(gt_boxes_perimg) * bid
         gt_rois = torch.cat([batch_inds, gt_boxes_perimg[:, :4]], axis=1)
         batch_roi_inds = torch.nonzero(rpn_rois[:, 0] == bid, as_tuple=False).flatten()
-        if config.add_gt_proposals:
-            all_rois = torch.cat([rpn_rois[batch_roi_inds], gt_rois], axis=0)
-        else:
-            all_rois = rpn_rois[batch_roi_inds]
+        all_rois = torch.cat([rpn_rois[batch_roi_inds], gt_rois], axis=0)
         overlaps_normal, overlaps_ignore = box_overlap_ignore_opr(
                 all_rois[:, 1:5], gt_boxes_perimg)
         overlaps_normal, overlaps_normal_indices = overlaps_normal.sort(descending=True, dim=1)
