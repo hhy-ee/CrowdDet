@@ -90,18 +90,16 @@ class RCNN(nn.Module):
             # variational inference
             gumbel_weight = F.softmax(pred_ddist, dim=2)
             project = torch.tensor(config.project).type_as(pred_ddist).repeat(4, 1)
-            pred_delta = gumbel_weight.mul(project).sum(dim=2)
-            pred_delta = pred_delta[fg_masks, :]
-            pred_ddist = pred_ddist[fg_masks, :]
+            pred_reg = gumbel_weight.mul(project).sum(dim=2)
 
             # loss for regression
             localization_loss = smooth_l1_loss(
-                pred_delta,
+                pred_reg[fg_masks],
                 bbox_targets[fg_masks],
                 config.rcnn_smooth_l1_beta)
             # distribution_loss 
             distribution_loss = dfl_xywh_loss(
-                pred_ddist, 
+                pred_ddist[fg_masks], 
                 bbox_targets[fg_masks],
                 config.kl_weight)
             # loss for classification
