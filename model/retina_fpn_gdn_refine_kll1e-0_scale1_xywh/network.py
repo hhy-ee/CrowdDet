@@ -104,7 +104,7 @@ class RetinaNet_Criteria(nn.Module):
         loss_dict = {}
         loss_dict['retina_focal_loss'] = loss_cls
         loss_dict['retina_smooth_l1'] = loss_reg
-        loss_dict['retina_cat_loss'] = loss_dis
+        loss_dict['retina_dist_loss'] = loss_dis
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
