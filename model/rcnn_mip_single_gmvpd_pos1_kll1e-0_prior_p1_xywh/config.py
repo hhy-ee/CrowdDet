@@ -107,7 +107,7 @@ class Config:
     gumbel_temperature = 1.0
     prior_std = [0.125, 0.125, 0.35, 0.35]
     plot_type = 'draw_mip_for_set_kl'
-    save_data = False
+    save_data = True
 
 config = Config()
 

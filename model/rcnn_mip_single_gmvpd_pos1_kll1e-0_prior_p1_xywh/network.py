@@ -130,6 +130,7 @@ class RCNN(nn.Module):
                 pred_scale_lstd_1 = pred_lstd_1.exp().mul(scale).log()
                 pred_prob = F.softmax(torch.cat([pred_logit_0, pred_logit_1], dim=1), dim=1) 
                 pred_prob_0, pred_prob_1 = torch.split(pred_prob, 1, dim=1)
+                
                 pred_bbox_0 = torch.cat([pred_bbox_0, pred_scores_0, tag, pred_prob_0, pred_scale_lstd_0], axis=1)
                 pred_bbox_1 = torch.cat([pred_bbox_1, pred_scores_1, tag, pred_prob_1, pred_scale_lstd_1], axis=1)
             pred_bbox = torch.cat((pred_bbox_0, pred_bbox_1), axis=1)
