@@ -83,7 +83,7 @@ def smooth_l1_loss(pred, target, beta: float):
         loss = torch.where(in_mask, 0.5 * abs_x ** 2 / beta, abs_x - 0.5 * beta)
     return loss.sum(axis=1)
 
-def dfl_xywh_loss(pred, target, beta: float):
+def dfl_xywh_loss(pred, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     pred = pred.reshape(-1, pred.shape[-1])
     target = target.reshape(-1) * scale + scale
@@ -94,7 +94,23 @@ def dfl_xywh_loss(pred, target, beta: float):
     weight_right = target - dis_left.float()
     loss = F.cross_entropy(pred, dis_left, reduction='none') * weight_left \
         + F.cross_entropy(pred, dis_right, reduction='none') * weight_right
-    return loss.reshape(-1, 4).sum(dim=1)
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+def kl_kdn_loss(pred, target, loss_weight):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    pred = pred.reshape(-1, pred.shape[-1])
+    target = target.reshape(-1) * scale + scale
+    target = target.clamp(min=0, max=2*scale)
+    dis_left = target.long()
+    dis_right = dis_left + 1
+    weight_left = dis_right.float() - target
+    weight_right = target - dis_left.float()
+    pred = F.softmax(pred, dim=1)
+    pred_weight_left = torch.gather(pred, 1, dis_left.reshape(-1,1)).reshape(-1)
+    pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
+    loss = weight_left * torch.log((weight_left + 1e-8) / pred_weight_left) + \
+        weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
     class_range = torch.arange(1, inputs.shape[1] + 1, device=inputs.device)
