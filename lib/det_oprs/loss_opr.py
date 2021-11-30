@@ -131,7 +131,7 @@ def nflow_dist_loss(pred, target, loss_weight):
     with torch.no_grad():
         x_bin_pmf, index = torch.sort(x_bin_pmf, dim=1, descending=False)
         pred_pmf = torch.gather(pred_pmf, 1, index)
-        target = target.clamp(min = torch.max(x_bin_pmf[:,0]), max=torch.min(x_bin_pmf[:,-1]))
+        target = target.clamp(min = -1, max=1)
         left = torch.where(~(((x_bin_pmf - target)>=0)[:,:-1] ^ ((x_bin_pmf - target)<=0)[:,1:]))[1]
         if left.shape[0] != x_bin_pmf.shape[0]:
             a = 1
