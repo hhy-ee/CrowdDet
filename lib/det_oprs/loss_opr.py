@@ -112,6 +112,42 @@ def kl_kdn_loss(pred, target, loss_weight):
         weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
+def nflow_dist_loss(pred, target, loss_weight):
+    pred = pred.reshape(-1, pred.shape[2])
+    target = target.reshape(-1, 1)
+    mean, lstd = pred[..., 0].reshape(-1,1), pred[..., 1].reshape(-1,1)
+    flow = pred[..., 2:].reshape(-1, config.nflow_layers, 3)
+    nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
+    q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+    x_bin = torch.tensor(config.bins).type_as(pred).repeat(mean.shape[0], 1)
+    pred_log_pdf = q0.log_prob(x_bin)
+    for l in range(config.nflow_layers):
+        psi = (1 - torch.tanh(nf_w[:, l] * x_bin + nf_b[:, l]).pow(2)) * nf_w[:, l]
+        pred_log_pdf -= torch.log(torch.abs(1 + psi * nf_u[:, l]))
+        x_bin = x_bin + torch.tanh(nf_w[:, l] * x_bin + nf_b[:, l]) * nf_u[:, l]
+    pred_pmf = (pred_log_pdf.exp()[:, 1:] + pred_log_pdf.exp()[:, :-1]) / 2 * \
+        (x_bin[:, 1:] - x_bin[:, :-1])
+    x_bin_pmf = (x_bin[:, 1:] + x_bin[:, :-1]) / 2
+    with torch.no_grad():
+        x_bin_pmf, index = torch.sort(x_bin_pmf, dim=1, descending=False)
+        pred_pmf = torch.gather(pred_pmf, 1, index)
+        target = target.clamp(min = torch.max(x_bin_pmf[:,0]), max=torch.min(x_bin_pmf[:,-1]))
+        left = torch.where(~(((x_bin_pmf - target)>=0)[:,:-1] ^ ((x_bin_pmf - target)<0)[:,1:]))[1]
+        if left.shape[0] != x_bin_pmf.shape[0]:
+            a = 1
+            
+        right = left + 1
+    weight_left = x_bin_pmf[torch.arange(right.shape[0]), right] - target.reshape(-1)
+    weight_right = target.reshape(-1) - x_bin_pmf[torch.arange(right.shape[0]), left]
+    weight_sum = weight_left + weight_right
+    weight_left = weight_left / weight_sum
+    weight_right = weight_right / weight_sum
+    pred_weight_left = torch.gather(pred_pmf, 1, left.reshape(-1,1)).reshape(-1)
+    pred_weight_right = torch.gather(pred_pmf, 1, right.reshape(-1,1)).reshape(-1)
+    loss = weight_left * torch.log((weight_left + 1e-8) / pred_weight_left) + \
+        weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
     class_range = torch.arange(1, inputs.shape[1] + 1, device=inputs.device)
     pos_pred = (1 - inputs) ** gamma * torch.log(inputs + eps)

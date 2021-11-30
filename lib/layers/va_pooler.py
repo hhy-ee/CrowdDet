@@ -85,7 +85,7 @@ def va_roi_align(features, boxes, dists, side_size, feature_scales, sample_ratio
     return output_features
 
 
-def va_samling_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ratio):
+def va_sampling_roi_pooler(fpn_fms, rois, dists, stride, pool_shape, va_sample_ratio):
     assert len(fpn_fms) == len(stride)
     max_level = int(math.log2(stride[-1]))
     min_level = int(math.log2(stride[0]))
