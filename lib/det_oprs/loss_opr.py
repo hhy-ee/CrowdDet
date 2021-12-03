@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.bbox_opr import box_overlap_opr, align_box_giou_opr
 from config import config
-from pynverse import inversefunc
 from utils import cal_utils
 
 INF = 100000000
