@@ -82,8 +82,9 @@ class Config:
     allow_low_quality = True
     save_data = False
 
-    # ----------freeanchor config---------- #
-    kl_weight = 1e-1
-    nflow_layers = 2
-    bins = np.linspace(-2, 2, 100)[None, :]
+    # ----------retinanet-normalzing_flow-config---------- #
+    kl_weight = 1.0
+    nflow_layers = 1
+    bound = 2
+    acc = 1e-2
 config = Config()
