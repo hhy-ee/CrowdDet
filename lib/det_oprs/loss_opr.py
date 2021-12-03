@@ -115,6 +115,21 @@ def kl_kdn_loss(pred, target, loss_weight):
         weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
+def kl_kdn_loss_complete(pred, target, loss_weight):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    pred = pred.reshape(-1, pred.shape[-1])
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=0, max=2 * config.project[0,-1] * scale)
+    dis_left = target.long()
+    dis_right = dis_left + 1
+    weight_left = dis_right.float() - target
+    weight_right = target - dis_left.float()
+    pred_weight_left = torch.gather(pred, 1, dis_left.reshape(-1,1)).reshape(-1)
+    pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
+    loss = weight_left * torch.log((weight_left + 1e-8) / pred_weight_left) + \
+        weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
 def nflow_dist_loss(pred, target, loss_weight):
     # Discretize target
     target = target.reshape(-1, 1)
