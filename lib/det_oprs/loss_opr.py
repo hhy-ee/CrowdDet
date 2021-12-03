@@ -7,6 +7,7 @@ from config import config
 from utils import cal_utils
 
 INF = 100000000
+EPS = 1e-6
 
 def softmax_loss(score, label, ignore_label=-1):
     with torch.no_grad():
@@ -89,7 +90,7 @@ def dfl_xywh_loss(pred, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     pred = pred.reshape(-1, pred.shape[-1])
     target = target.reshape(-1) * scale + scale
-    target = target.clamp(min=0, max=2*scale)
+    target = target.clamp(min=EPS, max=2*scale-EPS)
     dis_left = target.long()
     dis_right = dis_left + 1
     weight_left = dis_right.float() - target
@@ -102,7 +103,7 @@ def kl_kdn_loss(pred, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     pred = pred.reshape(-1, pred.shape[-1])
     target = (target.reshape(-1) + config.project[0,-1]) * scale
-    target = target.clamp(min=0, max=2 * config.project[0,-1] * scale)
+    target = target.clamp(min=EPS, max=2*config.project[0,-1]*scale-EPS)
     dis_left = target.long()
     dis_right = dis_left + 1
     weight_left = dis_right.float() - target
@@ -110,8 +111,10 @@ def kl_kdn_loss(pred, target, loss_weight):
     pred = F.softmax(pred, dim=1)
     pred_weight_left = torch.gather(pred, 1, dis_left.reshape(-1,1)).reshape(-1)
     pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
-    loss = weight_left * torch.log((weight_left + 1e-8) / pred_weight_left) + \
-        weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
+    loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
+        weight_right.mul(torch.log((weight_right + EPS) / (pred_weight_right + EPS)))
+    if not torch.isfinite(loss).all():
+            a = 1
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def kl_kdn_loss_complete(pred, target, loss_weight):
@@ -125,8 +128,8 @@ def kl_kdn_loss_complete(pred, target, loss_weight):
     weight_right = target - dis_left.float()
     pred_weight_left = torch.gather(pred, 1, dis_left.reshape(-1,1)).reshape(-1)
     pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
-    loss = weight_left * torch.log((weight_left + 1e-8) / pred_weight_left) + \
-        weight_right.mul(torch.log((weight_right + 1e-8) / pred_weight_right))
+    loss = weight_left * torch.log((weight_left + EPS) / pred_weight_left + EPS) + \
+        weight_right.mul(torch.log((weight_right + EPS) / pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def nflow_dist_loss(pred, target, loss_weight):
@@ -153,8 +156,8 @@ def nflow_dist_loss(pred, target, loss_weight):
         psi = (1 - torch.tanh(nf_w[:, l] * z0 + nf_b[:, l]).pow(2)) * nf_w[:, l]
         pred_log_pdf -= torch.log(torch.abs(1 + psi * nf_u[:, l]))
     pred_weight_left, pred_weight_right = torch.split(pred_log_pdf.exp() * config.acc, 1, dim=1)
-    loss = target_weight_left * torch.log((target_weight_left + 1e-8) / (pred_weight_left + 1e-8)) + \
-        target_weight_right.mul(torch.log((target_weight_right + 1e-8) / (pred_weight_right + 1e-8)))
+    loss = target_weight_left * torch.log((target_weight_left + EPS) / (pred_weight_left + EPS)) + \
+        target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
     if not torch.isfinite(loss).all():
         a = 1
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
