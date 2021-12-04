@@ -80,8 +80,8 @@ class RetinaNet_Criteria(nn.Module):
         # variational inference
         all_pred_reg = all_pred_reg[fg_mask]
         reg_mean, reg_lstd = all_pred_reg[..., 0], all_pred_reg[..., 1]
-        reg_flow = all_pred_reg[..., 2:].reshape(all_pred_reg.shape[0], 4, config.nflow_layers, 3)
-        reg_nf_u, reg_nf_w, reg_nf_b = reg_flow[..., 0], reg_flow[..., 1], reg_flow[..., 2]
+        reg_nf_u, reg_nf_w, reg_nf_b = torch.split(
+            all_pred_reg[..., 2:], config.nflow_layers, dim=2)
         fg_pred_delta = reg_mean + reg_lstd.exp() * torch.randn_like(reg_mean)
         q0 = torch.distributions.normal.Normal(reg_mean, reg_lstd.exp())
         log_q0_zK = q0.log_prob(fg_pred_delta)

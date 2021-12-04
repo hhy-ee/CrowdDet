@@ -150,7 +150,8 @@ def nflow_dist_loss(pred, target, loss_weight):
     nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
     q0 = torch.distributions.normal.Normal(mean, lstd.exp())
     zk = torch.cat([target_dis_left, target_dis_right], dim=1)
-    z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers, config.acc/100)
+    z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers)
+    z0 = torch.tensor(z0).type_as(zk)
     pred_log_pdf = q0.log_prob(z0)
     for l in range(config.nflow_layers):
         psi = (1 - torch.tanh(nf_w[:, l] * z0 + nf_b[:, l]).pow(2)) * nf_w[:, l]
@@ -158,8 +159,37 @@ def nflow_dist_loss(pred, target, loss_weight):
     pred_weight_left, pred_weight_right = torch.split(pred_log_pdf.exp() * config.acc, 1, dim=1)
     loss = target_weight_left * torch.log((target_weight_left + EPS) / (pred_weight_left + EPS)) + \
         target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
-    if not torch.isfinite(loss).all():
-        a = 1
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+def nflow_dist_loss1(pred, target, loss_weight):
+    # Discretize target
+    target = target.reshape(-1, 1)
+    target = target.clamp(min=-config.bound, max=config.bound)
+    target = (target + config.bound) / config.acc
+    dis_left_index = target.long()
+    dis_right_index = dis_left_index + 1
+    target_dis_left = dis_left_index * config.acc - config.bound
+    target_dis_right = dis_right_index * config.acc - config.bound
+    target_weight_left = dis_right_index.float() - target
+    target_weight_right = target - dis_left_index.float()
+    # Normalizing flow
+    pred = pred.reshape(-1, pred.shape[2])
+    mean, lstd = pred[..., 0].reshape(-1,1), pred[..., 1].reshape(-1,1)
+    flow = pred[..., 2:].reshape(-1, config.nflow_layers, 3)
+    nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
+    nf_u, nf_w = torch.exp(nf_u), torch.exp(nf_w)
+    flow = torch.cat([nf_u, nf_w, nf_b], dim=2)
+    q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+    zk = torch.cat([target_dis_left, target_dis_right], dim=1)
+    z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers)
+    z0 = torch.tensor(z0).type_as(zk)
+    pred_log_pdf = q0.log_prob(z0)
+    for l in range(config.nflow_layers):
+        psi = (1 - torch.tanh(nf_w[:, l] * z0 + nf_b[:, l]).pow(2)) * nf_w[:, l]
+        pred_log_pdf -= torch.log(torch.abs(1 + psi * nf_u[:, l]))
+    pred_weight_left, pred_weight_right = torch.split(pred_log_pdf.exp() * config.acc, 1, dim=1)
+    loss = target_weight_left * torch.log((target_weight_left + EPS) / (pred_weight_left + EPS)) + \
+        target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
