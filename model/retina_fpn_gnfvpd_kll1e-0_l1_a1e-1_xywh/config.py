@@ -86,5 +86,5 @@ class Config:
     kl_weight = 1.0
     nflow_layers = 1
     bound = 2
-    acc = 1e-2
+    acc = 1e-1
 config = Config()
