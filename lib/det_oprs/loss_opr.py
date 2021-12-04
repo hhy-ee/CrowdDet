@@ -150,7 +150,8 @@ def nflow_dist_loss(pred, target, loss_weight):
     nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
     q0 = torch.distributions.normal.Normal(mean, lstd.exp())
     zk = torch.cat([target_dis_left, target_dis_right], dim=1)
-    z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers, config.acc/100)
+    z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers)
+    z0 = torch.tensor(z0).type_as(zk)
     pred_log_pdf = q0.log_prob(z0)
     for l in range(config.nflow_layers):
         psi = (1 - torch.tanh(nf_w[:, l] * z0 + nf_b[:, l]).pow(2)) * nf_w[:, l]
