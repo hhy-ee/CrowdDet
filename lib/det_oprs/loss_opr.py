@@ -121,7 +121,7 @@ def kl_kdn_loss_complete(pred, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     pred = pred.reshape(-1, pred.shape[-1])
     target = (target.reshape(-1) + config.project[0,-1]) * scale
-    target = target.clamp(min=0, max=2 * config.project[0,-1] * scale)
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
     dis_left = target.long()
     dis_right = dis_left + 1
     weight_left = dis_right.float() - target
