@@ -85,6 +85,8 @@ class Config:
     # ----------retinanet-normalzing_flow-config---------- #
     kl_weight = 1.0
     nflow_layers = 1
-    bound = 1
-    acc =1e-2
+    target_bound = 1
+    target_acc =1e-1
+    sample_num = 1000
+    test_project = np.linspace(-10, 10, 2001)[None, :]
 config = Config()

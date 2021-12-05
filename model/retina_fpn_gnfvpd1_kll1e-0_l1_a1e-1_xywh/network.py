@@ -12,6 +12,7 @@ from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import focal_loss, smooth_l1_loss, nflow_dist_loss1
 from det_oprs.utils import get_padded_tensor
+from utils import cal_utils
 
 class Network(nn.Module):
     def __init__(self):
@@ -79,19 +80,29 @@ class RetinaNet_Criteria(nn.Module):
         valid_mask = (labels >= 0).flatten()
         # variational inference
         all_pred_reg = all_pred_reg[fg_mask]
-        reg_mean, reg_lstd = all_pred_reg[..., 0], all_pred_reg[..., 1]
-        reg_nf_u, reg_nf_w, reg_nf_b = torch.split(
-            all_pred_reg[..., 2:], config.nflow_layers, dim=2)
+        reg_mean, reg_lstd = torch.split(all_pred_reg[..., 0:2], 1, dim=2)
+        flow = all_pred_reg[..., 2:].reshape(-1, 4, config.nflow_layers, 3)
+        reg_nf_u, reg_nf_w, reg_nf_b = torch.split(flow, 1, dim=3)
         reg_nf_u, reg_nf_w = torch.exp(reg_nf_u), torch.exp(reg_nf_w)
-        fg_pred_delta = reg_mean + reg_lstd.exp() * torch.randn_like(reg_mean)
-        q0 = torch.distributions.normal.Normal(reg_mean, reg_lstd.exp())
-        log_q0_zK = q0.log_prob(fg_pred_delta)
+        flow = torch.cat([reg_nf_u, reg_nf_w, reg_nf_b], dim=3)
+        fg_pred_delta = reg_mean.repeat(1,1,config.sample_num) + \
+            reg_lstd.exp() * torch.randn_like(reg_mean.repeat(1,1,config.sample_num))
         for l in range(config.nflow_layers):
-            psi = (1 - torch.tanh(reg_nf_w[..., l] * fg_pred_delta + \
-                reg_nf_b[..., l]).pow(2)) * reg_nf_w[..., l]
-            log_q0_zK -= torch.log(torch.abs(1 + psi * reg_nf_u[..., l]))
-            fg_pred_delta = fg_pred_delta + torch.tanh(reg_nf_w[..., l] \
-                * fg_pred_delta + reg_nf_b[..., l]) * reg_nf_u[..., l]
+            fg_pred_delta = fg_pred_delta + torch.tanh(reg_nf_w[:, :, l] \
+                * fg_pred_delta + reg_nf_b[:, :, l]) * reg_nf_u[:, :, l]
+        fg_pred_delta = fg_pred_delta.mean(dim=2)
+        # qk_zk
+        q0 = torch.distributions.normal.Normal(reg_mean, reg_lstd.exp())
+        flow = flow.reshape(-1, config.nflow_layers, 3)
+        zk = fg_pred_delta.reshape(-1, 1)
+        z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers)
+        z0 = torch.tensor(z0).type_as(zk).reshape(-1, 4, 1)
+        log_q0_zK = q0.log_prob(z0)
+        for l in range(config.nflow_layers):
+            psi = (1 - torch.tanh(reg_nf_w[:, :, l] * z0 + \
+                    reg_nf_b[:, :, l]).pow(2)) * reg_nf_w[:, :, l]
+            log_q0_zK = log_q0_zK - torch.log(torch.abs(1 + psi * reg_nf_u[:, :, l]))
+            z0 = z0 + torch.tanh(reg_nf_w[:, :, l] * z0 + reg_nf_b[:, :, l]) * reg_nf_u[:, :, l]
         # regression loss
         loss_reg = smooth_l1_loss(
                 fg_pred_delta,
@@ -185,10 +196,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 4, 21)
-        weight = F.softmax(pred_reg, dim=2)
-        project = torch.tensor(config.project).type_as(pred_reg).repeat(4, 1)
-        pred_reg = weight.mul(project).sum(dim=2)
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 4 * (2 + 3 * config.nflow_layers))
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
@@ -203,6 +211,23 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     keep_anchors = torch.cat(keep_anchors, axis = 0)
     keep_cls = torch.cat(keep_cls, axis = 0)
     keep_reg = torch.cat(keep_reg, axis = 0)
+    # normalizing_flow_inference
+    keep_reg = keep_reg.reshape(-1, 2 + 3 * config.nflow_layers)
+    project = torch.tensor(config.test_project).type_as(keep_reg)
+    mean, lstd = torch.split(keep_reg[:, 0:2], 1, dim=1)
+    flow = keep_reg[:, 2:].reshape(-1, config.nflow_layers, 3)
+    nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
+    nf_u, nf_w = torch.exp(nf_u), torch.exp(nf_w)
+    q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+    log_q0_zK = q0.log_prob(project)
+    zk = project.repeat(keep_reg.shape[0], 1)
+    for l in range(config.nflow_layers):
+        psi = (1 - torch.tanh(nf_w[:, l] * zk + nf_b[:, l]).pow(2)) * nf_w[:, l]
+        log_q0_zK -= torch.log(torch.abs(1 + psi * nf_u[:, l]))
+        zk = zk + torch.tanh(nf_w[:, l] * zk + nf_b[:, l]) * nf_u[:, l]
+    zdk = (zk[:, :-1] + zk[:, 1:]) / 2
+    pmf_zdk = (log_q0_zK.exp()[:, :-1] +log_q0_zK.exp()[:, 1:]) / 2 * (zk[:, 1:] - zk[:, :-1])
+    keep_reg = pmf_zdk.mul(zdk).sum(1).reshape(-1, 4)
     # multiclass
     tag = torch.arange(class_num).type_as(keep_cls)+1
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
