@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, nflow_dist_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, nflow_dist_loss1
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -82,6 +82,7 @@ class RetinaNet_Criteria(nn.Module):
         reg_mean, reg_lstd = all_pred_reg[..., 0], all_pred_reg[..., 1]
         reg_nf_u, reg_nf_w, reg_nf_b = torch.split(
             all_pred_reg[..., 2:], config.nflow_layers, dim=2)
+        reg_nf_u, reg_nf_w = torch.exp(reg_nf_u), torch.exp(reg_nf_w)
         fg_pred_delta = reg_mean + reg_lstd.exp() * torch.randn_like(reg_mean)
         q0 = torch.distributions.normal.Normal(reg_mean, reg_lstd.exp())
         log_q0_zK = q0.log_prob(fg_pred_delta)
@@ -101,7 +102,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_dis_gt = nflow_dist_loss(
+        loss_dis_gt = nflow_dist_loss1(
                 all_pred_reg,
                 bbox_target[fg_mask],
                 config.kl_weight)
