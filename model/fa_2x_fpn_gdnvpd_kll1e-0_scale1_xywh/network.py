@@ -80,7 +80,7 @@ class RetinaNet_Criteria(nn.Module):
         weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
         all_pred_gumbel_delta = gumbel_weight.mul(project).sum(dim=2)
-        all_pred_delta = gumbel_weight.mul(weight).sum(dim=2)
+        all_pred_delta = weight.mul(project).sum(dim=2)
         # freeanchor loss
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_gumbel_delta, gt_boxes, im_info)
         # kl loss

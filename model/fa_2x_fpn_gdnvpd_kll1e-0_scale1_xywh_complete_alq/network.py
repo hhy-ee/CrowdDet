@@ -85,7 +85,7 @@ class RetinaNet_Criteria(nn.Module):
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_gumbel_delta, gt_boxes, im_info)
         # kl loss
         all_anchors = all_anchors.repeat(config.train_batch_per_gpu,1)
-        all_pred_boxes = bbox_transform_inv_opr(all_anchors, all_pred_delta)
+        all_pred_boxes = bbox_transform_inv_opr(all_anchors, all_pred_gumbel_delta)
         labels, bbox_target = fa_alq_anchor_target(all_pred_boxes, all_anchors, gt_boxes, im_info, top_k=1)
         fg_mask = (labels > 0).flatten()
         loss_kl = kl_kdn_loss(
