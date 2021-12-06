@@ -79,7 +79,7 @@ class Config:
     smooth_l1_beta = 0.1
     negative_thresh = 0.4
     positive_thresh = 0.5
-    allow_low_quality = False
+    allow_low_quality = True
     save_data = False
     add_test_noise = False
 
