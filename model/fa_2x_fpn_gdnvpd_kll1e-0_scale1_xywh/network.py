@@ -8,7 +8,7 @@ from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.fa_anchor_target import fa_anchor_target
+from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import kl_kdn_loss
 from det_oprs.my_loss_opr import freeanchor_loss
@@ -80,13 +80,10 @@ class RetinaNet_Criteria(nn.Module):
         weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
         all_pred_gumbel_delta = gumbel_weight.mul(project).sum(dim=2)
-        all_pred_delta = weight.mul(project).sum(dim=2)
         # freeanchor loss
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_gumbel_delta, gt_boxes, im_info)
         # kl loss
-        all_anchors = all_anchors.repeat(config.train_batch_per_gpu,1)
-        all_pred_boxes = bbox_transform_inv_opr(all_anchors, all_pred_delta)
-        labels, bbox_target = fa_anchor_target(all_pred_boxes, all_anchors, gt_boxes, im_info, top_k=1)
+        labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
         fg_mask = (labels > 0).flatten()
         loss_kl = kl_kdn_loss(
                 all_pred_reg[fg_mask], 
