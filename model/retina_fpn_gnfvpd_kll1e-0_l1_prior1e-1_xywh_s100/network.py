@@ -14,6 +14,8 @@ from det_oprs.loss_opr import focal_loss, smooth_l1_loss, nflow_dist_loss2
 from det_oprs.utils import get_padded_tensor
 from utils import cal_utils
 
+EPS=1e-6
+ 
 class Network(nn.Module):
     def __init__(self):
         super().__init__()
@@ -36,7 +38,7 @@ class Network(nn.Module):
         # release the useless data
         if self.training:
             loss_dict = self.R_Criteria(
-                    pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info)
+                    pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info, epoch)
             return loss_dict
         else:
             #pred_bbox = union_inference(
@@ -69,7 +71,7 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = 100 # initialize with any reasonable #fg that's not too small
         self.loss_normalizer_momentum = 0.9
 
-    def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info):
+    def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info, epoch):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
@@ -85,28 +87,41 @@ class RetinaNet_Criteria(nn.Module):
         reg_nf_u, reg_nf_w, reg_nf_b = torch.split(flow, 1, dim=3)
         reg_nf_u = (torch.log(1 + torch.exp(reg_nf_u * reg_nf_w)) \
             - 1 - reg_nf_u * reg_nf_w) * (reg_nf_w / torch.norm(reg_nf_w, p=2)) + reg_nf_u
-        flow = torch.cat([reg_nf_u, reg_nf_w, reg_nf_b], dim=3)
+        # qk_zk
         fg_pred_delta = reg_mean.repeat(1,1,config.sample_num) + \
             reg_lstd.exp() * torch.randn_like(reg_mean.repeat(1,1,config.sample_num))
-        for l in range(config.nflow_layers):
-            fg_pred_delta = fg_pred_delta + torch.tanh(reg_nf_w[:, :, l] \
-                * fg_pred_delta + reg_nf_b[:, :, l]) * reg_nf_u[:, :, l]
-        fg_pred_delta = fg_pred_delta.mean(dim=2)
-        # qk_zk
         q0 = torch.distributions.normal.Normal(reg_mean, reg_lstd.exp())
-        flow = flow.reshape(-1, config.nflow_layers, 3)
-        zk = fg_pred_delta.reshape(-1, 1)
-        z0 = cal_utils.pf_inv_mapping(flow, zk, config.nflow_layers)
-        z0 = torch.tensor(z0).type_as(zk).reshape(-1, 4, 1)
-        log_q0_zK = q0.log_prob(z0)
+        log_q0_zK = q0.log_prob(fg_pred_delta)
         for l in range(config.nflow_layers):
-            psi = (1 - torch.tanh(reg_nf_w[:, :, l] * z0 + \
+            psi = (1 - torch.tanh(reg_nf_w[:, :, l] * fg_pred_delta + \
                     reg_nf_b[:, :, l]).pow(2)) * reg_nf_w[:, :, l]
             log_q0_zK = log_q0_zK - torch.log(torch.abs(1 + psi * reg_nf_u[:, :, l]))
-            z0 = z0 + torch.tanh(reg_nf_w[:, :, l] * z0 + reg_nf_b[:, :, l]) * reg_nf_u[:, :, l]
+            fg_pred_delta = fg_pred_delta + torch.tanh(reg_nf_w[:, :, l] \
+                * fg_pred_delta + reg_nf_b[:, :, l]) * reg_nf_u[:, :, l]
+        fg_pred_reg = torch.mean(fg_pred_delta, dim=2, keepdim=True)
+        sort = torch.argsort(fg_pred_reg - fg_pred_delta, dim=2, descending=True)
+        fg_pred_delta = torch.gather(fg_pred_delta, 2, sort)
+        log_q0_zK = torch.gather(log_q0_zK, 2, sort)
+        lr_mask = fg_pred_reg - fg_pred_delta  < 0
+        left_idx = torch.where(lr_mask[:, :, :-1] ^ lr_mask[:, :, 1:])[2].reshape(-1, 4, 1)
+        right_idx = left_idx + 1
+        wgh_left = torch.gather(fg_pred_delta, 2, right_idx) - fg_pred_reg
+        wgh_right = fg_pred_reg - torch.gather(fg_pred_delta, 2, left_idx)
+        wgh_total = wgh_left + wgh_right
+        wgh_left = wgh_left / wgh_total
+        wgh_right = wgh_right / wgh_total
+        logp_left = torch.gather(log_q0_zK, 2, left_idx)
+        logp_right = torch.gather(log_q0_zK, 2, right_idx)
+        log_q0_zK = torch.log(logp_left.exp() * wgh_left + logp_right.exp() * wgh_right)
+        # prior_zk
+        fg_pred_reg = fg_pred_reg.reshape(-1, 4)
+        target_std = config.prior_std * np.power(config.std_decay, epoch/config.max_epoch)
+        prior = torch.distributions.normal.Normal(bbox_target[fg_mask], target_std)
+        log_prior_zk = prior.log_prob(fg_pred_reg)
+
         # regression loss
         loss_reg = smooth_l1_loss(
-                fg_pred_delta,
+                fg_pred_reg,
                 bbox_target[fg_mask],
                 config.smooth_l1_beta)
         loss_cls = focal_loss(
@@ -114,10 +129,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_dis_gt = nflow_dist_loss2(
-                all_pred_reg,
-                bbox_target[fg_mask],
-                config.kl_weight)
+        loss_dis_gt = -log_prior_zk * config.kl_weight
         loss_dis_q0 = log_q0_zK * config.kl_weight
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (

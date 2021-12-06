@@ -109,7 +109,7 @@ def kl_kdn_loss(pred, target, loss_weight):
     weight_left = dis_right.float() - target
     weight_right = target - dis_left.float()
     pred = F.softmax(pred, dim=1)
-    pred_weight_left = torch.gather(pred, 1, dis_left.reshape(-1,1)).reshape(-1)
+    pred_weight_left = (pred, 1, dis_left.reshape(-1,1)).reshape(-1)
     pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
     loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
         weight_right.mul(torch.log((weight_right + EPS) / (pred_weight_right + EPS)))
@@ -192,7 +192,7 @@ def nflow_dist_loss1(pred, target, loss_weight):
         target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
-def nflow_dist_loss2(pred, target, loss_weight):
+def nflow_dist_loss2(pred, flow1, target, loss_weight):
     # Discretize target
     target = target.reshape(-1, 1)
     target = target.clamp(min=-config.target_bound+EPS, max=config.target_bound-EPS)
@@ -209,7 +209,7 @@ def nflow_dist_loss2(pred, target, loss_weight):
     flow = pred[..., 2:].reshape(-1, config.nflow_layers, 3)
     nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
     nf_u = (torch.log(1 + torch.exp(nf_u * nf_w)) \
-        - 1 - nf_u * nf_w) * torch.sign(nf_w) + nf_u
+        - 1 - nf_u * nf_w) * (nf_w / nf_w.pow(2)) + nf_u
     flow = torch.cat([nf_u, nf_w, nf_b], dim=2)
     q0 = torch.distributions.normal.Normal(mean, lstd.exp())
     zk = torch.cat([target_dis_left, target_dis_right], dim=1)

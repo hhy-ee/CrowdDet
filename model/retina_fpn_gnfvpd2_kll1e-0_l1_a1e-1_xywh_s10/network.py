@@ -84,7 +84,7 @@ class RetinaNet_Criteria(nn.Module):
         flow = all_pred_reg[..., 2:].reshape(-1, 4, config.nflow_layers, 3)
         reg_nf_u, reg_nf_w, reg_nf_b = torch.split(flow, 1, dim=3)
         reg_nf_u = (torch.log(1 + torch.exp(reg_nf_u * reg_nf_w)) \
-            - 1 - reg_nf_u * reg_nf_w) * (reg_nf_w / torch.norm(reg_nf_w, p=2)) + reg_nf_u
+            - 1 - reg_nf_u * reg_nf_w) * (reg_nf_w / reg_nf_w.pow(2)) + reg_nf_u
         flow = torch.cat([reg_nf_u, reg_nf_w, reg_nf_b], dim=3)
         fg_pred_delta = reg_mean.repeat(1,1,config.sample_num) + \
             reg_lstd.exp() * torch.randn_like(reg_mean.repeat(1,1,config.sample_num))
@@ -116,6 +116,7 @@ class RetinaNet_Criteria(nn.Module):
                 config.focal_loss_gamma)
         loss_dis_gt = nflow_dist_loss2(
                 all_pred_reg,
+                flow, 
                 bbox_target[fg_mask],
                 config.kl_weight)
         loss_dis_q0 = log_q0_zK * config.kl_weight
