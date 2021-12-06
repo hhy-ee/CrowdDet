@@ -87,6 +87,6 @@ class Config:
     nflow_layers = 1
     target_bound = 1
     target_acc =1e-1
-    sample_num = 1000
+    sample_num = 10
     test_project = np.linspace(-10, 10, 2001)[None, :]
 config = Config()
