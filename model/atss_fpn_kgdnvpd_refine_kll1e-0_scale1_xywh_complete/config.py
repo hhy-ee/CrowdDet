@@ -85,4 +85,9 @@ class Config:
     # -------------atss-config --------------------#
     ignore_ioa_thr = 0.5
     assign_topk = 9
+    kl_weight = 1.0
+    gumbel_temperature = 1.0
+    project = np.linspace(-1, 1, 21)[None, :]
+    reg_topk = 4
+    add_mean = True
 config = Config()
