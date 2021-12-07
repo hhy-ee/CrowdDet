@@ -4,80 +4,42 @@ import numpy as np
 from config import config
 from det_oprs.bbox_opr import box_overlap_opr, bbox_transform_opr, box_giou_opr
 
-@torch.no_grad()
-def fa_anchor_target(boxes, anchors, gt_boxes, im_info, top_k=1):
-    return_labels = []
-    return_bbox_targets = []
-    # get per image proposals and gt_boxes
-    boxes = boxes.reshape(config.train_batch_per_gpu, -1, 4)
-    anchors = anchors.reshape(config.train_batch_per_gpu, -1, 4)
-    for bid in range(config.train_batch_per_gpu):
-        gt_boxes_perimg = gt_boxes[bid, :int(im_info[bid, 5]), :]
-        anchors_perimg = anchors[bid].type_as(gt_boxes_perimg)
-        boxes_perimg = boxes[bid].type_as(gt_boxes_perimg)
-        overlaps = box_overlap_opr(boxes_perimg, gt_boxes_perimg[:, :-1])
-        # gt max and indices
-        max_overlaps, gt_assignment = overlaps.topk(top_k, dim=1, sorted=True)
-        max_overlaps= max_overlaps.flatten()
-        gt_assignment= gt_assignment.flatten()
-        del overlaps
-        # cons labels
-        labels = gt_boxes_perimg[gt_assignment, 4]
-        labels = labels * (max_overlaps >= config.negative_thresh)
-        ignore_mask = (max_overlaps < config.positive_thresh) * (
-                max_overlaps >= config.negative_thresh)
-        labels[ignore_mask] = -1
-        # cons bbox targets
-        target_boxes = gt_boxes_perimg[gt_assignment, :4]
-        target_anchors = anchors_perimg.repeat(1, top_k).reshape(-1, anchors_perimg.shape[-1])
-        bbox_targets = bbox_transform_opr(target_anchors, target_boxes)
-        labels = labels.reshape(-1, 1 * top_k)
-        bbox_targets = bbox_targets.reshape(-1, 4 * top_k)
-        return_labels.append(labels)
-        return_bbox_targets.append(bbox_targets)
-
-    if config.train_batch_per_gpu == 1:
-        return labels, bbox_targets
-    else:
-        return_labels = torch.cat(return_labels, axis=0)
-        return_bbox_targets = torch.cat(return_bbox_targets, axis=0)
-        return return_labels, return_bbox_targets
+INF = 100000000
 
 @torch.no_grad()
-def fa_alq_anchor_target(boxes, anchors, gt_boxes, im_info, top_k=1):
+def fa_anchor_target(anchors, gt_boxes, im_info, top_k):
     return_labels = []
     return_bbox_targets = []
+    num_bboxes = anchors.size(0)
     # get per image proposals and gt_boxes
-    boxes = boxes.reshape(config.train_batch_per_gpu, -1, 4)
-    anchors = anchors.reshape(config.train_batch_per_gpu, -1, 4)
     for bid in range(config.train_batch_per_gpu):
         gt_boxes_perimg = gt_boxes[bid, :int(im_info[bid, 5]), :]
-        anchors_perimg = anchors[bid].type_as(gt_boxes_perimg)
-        boxes_perimg = boxes[bid].type_as(gt_boxes_perimg)
-        overlaps = box_overlap_opr(boxes_perimg, gt_boxes_perimg[:, :-1])
+        obj_mask = torch.where(gt_boxes_perimg[:, -1] == 1)[0]
+        gt_boxes_perimg = gt_boxes_perimg[obj_mask]
+        num_gt = gt_boxes_perimg.size(0)
+        overlaps = box_overlap_opr(anchors, gt_boxes_perimg[:, :-1])
+        overlaps_inf = torch.full_like(overlaps, -INF).t().contiguous().view(-1)
+        gt_assignment = overlaps.new_full((num_bboxes, ), 0, dtype=torch.long)
         # gt max and indices
-        max_overlaps, gt_assignment = overlaps.topk(top_k, dim=1, sorted=True)
-        max_overlaps= max_overlaps.flatten()
-        gt_assignment= gt_assignment.flatten()
-        _, gt_assignment_for_gt = torch.max(overlaps, axis=0)
+        candidate_overlaps, candidate_idxs = overlaps.topk(top_k, dim=0, sorted=True)
         del overlaps
+        for gt_idx in range(num_gt):
+            candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
+        candidate_idxs = candidate_idxs.view(-1)
+        overlaps_inf[candidate_idxs] = candidate_overlaps.view(-1)
+        overlaps_inf = overlaps_inf.view(num_gt, -1).t()
+        max_overlaps, argmax_overlaps = overlaps_inf.max(dim=1)
+        gt_assignment[max_overlaps != -INF] = argmax_overlaps[max_overlaps != -INF] + 1
+        pos_inds = torch.nonzero(gt_assignment > 0, as_tuple=False).squeeze()
         # cons labels
-        labels = gt_boxes_perimg[gt_assignment, 4]
-        labels = labels * (max_overlaps >= config.negative_thresh)
-        ignore_mask = (max_overlaps < config.positive_thresh) * (
-                max_overlaps >= config.negative_thresh)
-        labels[ignore_mask] = -1
+        labels = gt_assignment.new_full((num_bboxes, ), -1, dtype=torch.float32)
+        if pos_inds.numel() > 0:
+            labels[pos_inds] = gt_boxes_perimg[gt_assignment[pos_inds]-1, -1]
         # cons bbox targets
-        target_boxes = gt_boxes_perimg[gt_assignment, :4]
-        target_anchors = anchors_perimg.repeat(1, top_k).reshape(-1, anchors_perimg.shape[-1])
-        bbox_targets = bbox_transform_opr(target_anchors, target_boxes)
-        if config.allow_low_quality:
-            labels[gt_assignment_for_gt] = gt_boxes_perimg[:, 4]
-            low_quality_bbox_targets = bbox_transform_opr(
-                anchors_perimg[gt_assignment_for_gt], gt_boxes_perimg[:, :4])
-            bbox_targets[gt_assignment_for_gt] = low_quality_bbox_targets
-        labels = labels.reshape(-1, 1 * top_k)
-        bbox_targets = bbox_targets.reshape(-1, 4 * top_k)
+        target_boxes = gt_boxes_perimg[gt_assignment - 1, :4]
+        bbox_targets = bbox_transform_opr(anchors, target_boxes)
+        labels = labels.reshape(-1, 1)
+        bbox_targets = bbox_targets.reshape(-1, 4)
         return_labels.append(labels)
         return_bbox_targets.append(bbox_targets)
 
