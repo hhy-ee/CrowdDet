@@ -85,21 +85,32 @@ class RetinaNet_Criteria(nn.Module):
         reg_nf_u, reg_nf_w, reg_nf_b = torch.split(flow, 1, dim=3)
         reg_nf_u = (torch.log(1 + torch.exp(reg_nf_u * reg_nf_w)) \
             - 1 - reg_nf_u * reg_nf_w) * (reg_nf_w / torch.norm(reg_nf_w, p=2)) + reg_nf_u
+
         # qk_zk
         fg_pred_delta = reg_mean + reg_lstd.exp() * torch.randn_like(reg_mean)
         q0 = torch.distributions.normal.Normal(reg_mean, reg_lstd.exp())
-        log_q0_zK = q0.log_prob(fg_pred_delta)
+        log_qk_zK = q0.log_prob(fg_pred_delta)
         for l in range(config.nflow_layers):
             psi = (1 - torch.tanh(reg_nf_w[:, :, l] * fg_pred_delta + \
                     reg_nf_b[:, :, l]).pow(2)) * reg_nf_w[:, :, l]
-            log_q0_zK = log_q0_zK - torch.log(torch.abs(1 + psi * reg_nf_u[:, :, l]))
+            log_qk_zK = log_qk_zK - torch.log(torch.abs(1 + psi * reg_nf_u[:, :, l]))
             fg_pred_delta = fg_pred_delta + torch.tanh(reg_nf_w[:, :, l] \
                 * fg_pred_delta + reg_nf_b[:, :, l]) * reg_nf_u[:, :, l]
         fg_pred_delta = fg_pred_delta.mean(dim=2)
+        log_qk_zK = log_qk_zK.reshape(-1, 4)
+
+        # q0_zk
+        log_q0_zK = q0.log_prob(fg_pred_delta.reshape(-1, 4, 1))
+        log_q0_zK = log_q0_zK.reshape(-1, 4)
+
         # prior_zk
         target_std = config.prior_std * np.power(config.std_decay, epoch/config.max_epoch)
         prior = torch.distributions.normal.Normal(bbox_target[fg_mask], target_std)
         log_prior_zk = prior.log_prob(fg_pred_delta)
+
+        # kldivergence loss
+        loss_kld = log_q0_zK + log_qk_zK -log_prior_zk
+        loss_kld = loss_kld * config.kl_weight
         # regression loss
         loss_reg = smooth_l1_loss(
                 fg_pred_delta,
@@ -110,21 +121,17 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_dis_gt = -log_prior_zk * config.kl_weight
-        loss_dis_q0 = log_q0_zK * config.kl_weight
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
             ) * max(num_pos_anchors, 1)
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
-        loss_dis_gt = loss_dis_gt.sum() / self.loss_normalizer
-        loss_dis_q0 = loss_dis_q0.sum() / self.loss_normalizer
+        loss_kld = loss_kld.sum() / self.loss_normalizer
         loss_dict = {}
         loss_dict['retina_focal_loss'] = loss_cls
         loss_dict['retina_smooth_l1'] = loss_reg
-        loss_dict['retina_dist_gt'] = loss_dis_gt
-        loss_dict['loss_dis_q0'] = loss_dis_q0
+        loss_dict['retina_kld_loss'] = loss_kld
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -211,7 +218,8 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     mean, lstd = torch.split(keep_reg[:, 0:2], 1, dim=1)
     flow = keep_reg[:, 2:].reshape(-1, config.nflow_layers, 3)
     nf_u, nf_w, nf_b = torch.split(flow, 1, dim=2)
-    nf_u, nf_w = torch.exp(nf_u), torch.exp(nf_w)
+    nf_u = (torch.log(1 + torch.exp(nf_u * nf_w)) \
+        - 1 - nf_u * nf_w) * (nf_w / torch.norm(nf_w, p=2)) + nf_u
     q0 = torch.distributions.normal.Normal(mean, lstd.exp())
     log_q0_zK = q0.log_prob(project)
     zk = project.repeat(keep_reg.shape[0], 1)
@@ -219,10 +227,15 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         psi = (1 - torch.tanh(nf_w[:, l] * zk + nf_b[:, l]).pow(2)) * nf_w[:, l]
         log_q0_zK -= torch.log(torch.abs(1 + psi * nf_u[:, l]))
         zk = zk + torch.tanh(nf_w[:, l] * zk + nf_b[:, l]) * nf_u[:, l]
-    zdk = (zk[:, :-1] + zk[:, 1:]) / 2
-    pmf_zdk = (log_q0_zK.exp()[:, :-1] +log_q0_zK.exp()[:, 1:]) / 2 * (zk[:, 1:] - zk[:, :-1])
-    keep_reg = pmf_zdk.mul(zdk).sum(1).reshape(-1, 4)
+    # mean
+    # zdk = (zk[:, :-1] + zk[:, 1:]) / 2
+    # pmf_zdk = (log_q0_zK.exp()[:, :-1] +log_q0_zK.exp()[:, 1:]) / 2 * (zk[:, 1:] - zk[:, :-1])
+    # keep_reg = pmf_zdk.mul(zdk).sum(1).reshape(-1, 4)
     # multiclass
+    # max
+    max_idx = torch.argmax(log_q0_zK, dim=1, keepdim=True)
+    keep_reg = torch.gather(zk, 1, max_idx).reshape(-1, 4)
+
     tag = torch.arange(class_num).type_as(keep_cls)+1
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
     pred_scores = keep_cls.reshape(-1, 1)

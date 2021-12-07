@@ -85,7 +85,7 @@ class Config:
     # ----------retinanet-normalzing_flow-config---------- #
     kl_weight = 1.0
     nflow_layers = 1
-    sample_num = 100
+    sample_num = 50
     prior_std = 1
     std_decay = 0.1
     test_project = np.linspace(-10, 10, 2001)[None, :]
