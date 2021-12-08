@@ -76,6 +76,7 @@ class RetinaNet_Criteria(nn.Module):
         # variational inference
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(all_pred_reg) + 1e-10) + 1e-10)
         gumbel_weight = F.softmax((gumbel_sample + all_pred_reg) / config.gumbel_temperature, dim=2)
+        weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
         all_pred_delta = gumbel_weight.mul(project).sum(dim=2)
         # get ground truth
@@ -93,7 +94,7 @@ class RetinaNet_Criteria(nn.Module):
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
         loss_dis = kl_kdn_loss_complete(
-                gumbel_weight[fg_mask], 
+                weight[fg_mask], 
                 bbox_target[fg_mask],
                 config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()
