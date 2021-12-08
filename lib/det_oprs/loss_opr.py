@@ -382,6 +382,30 @@ def emd_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     loss = loss.reshape(-1, 2).sum(axis=1)
     return loss.reshape(-1, 1)
 
+def emd_gmvpd_loss_kl(p_b0, p_s0, p_b1, p_s1, targets, labels):
+    # reshape
+    pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
+    pred_score = torch.cat([p_s0, p_s1], axis=1).reshape(-1, p_s0.shape[-1])
+    targets = targets.reshape(-1, 4)
+    labels = labels.long().flatten()
+    # cons masks
+    valid_masks = labels >= 0
+    fg_masks = labels > 0
+    # multiple class
+    pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
+    pred_delta = pred_delta[fg_masks, :4]
+    # loss for regression
+    localization_loss = smooth_l1_loss(
+        pred_delta,
+        targets[fg_masks],
+        config.rcnn_smooth_l1_beta)
+    # loss for classification
+    objectness_loss = softmax_loss(pred_score, labels)
+    loss = objectness_loss * valid_masks
+    loss[fg_masks] = loss[fg_masks] + localization_loss
+    loss = loss.reshape(-1, 2).sum(axis=1)
+    return loss.reshape(-1, 1)
+
 def mip_loss_softmax(p_b0, p_s0, p_b1, p_s1, targets, labels):
     # reshape
     pred_delta = torch.cat([p_b0, p_b1], axis=1).reshape(-1, p_b0.shape[-1])
