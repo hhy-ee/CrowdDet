@@ -207,4 +207,3 @@ def restore_bbox(rois, deltas, unnormalize=True):
         deltas = deltas + mean_opr
     pred_bbox = bbox_transform_inv_opr(rois, deltas)
     return pred_bbox
-
