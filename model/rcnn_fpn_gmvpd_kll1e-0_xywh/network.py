@@ -55,8 +55,8 @@ class RCNN(nn.Module):
     def __init__(self):
         super().__init__()
         # roi head
-        self.fc1 = nn.Linear(256*7*7 + config.num_components, 1024)
-        self.fc2 = nn.Linear(1024, 1024)
+        self.fc1 = nn.Linear(256*7*7, 1024)
+        self.fc2 = nn.Linear(1024 + config.num_components, 1024)
         self.fc_l1 = nn.Linear(256*7*7, 1024)
         self.fc_l2 = nn.Linear(1024, 1024)
         self.logits = nn.Linear(1024, config.num_components)
@@ -91,8 +91,8 @@ class RCNN(nn.Module):
         prior_mean = self.fc_mu(gumbel_prob)
         prior_lstd = self.fc_std(gumbel_prob)
         # soft GMM
-        gumbel_feature = torch.cat([flatten_feature, gumbel_prob], dim=1)
-        gumbel_feature = F.relu_(self.fc1(gumbel_feature))
+        gumbel_feature = F.relu_(self.fc1(flatten_feature))
+        gumbel_feature = torch.cat([gumbel_feature, gumbel_prob], dim=1)
         gumbel_feature = F.relu_(self.fc2(gumbel_feature))
         pred_cls = self.pred_cls(gumbel_feature)
         pred_dist = self.pred_delta(gumbel_feature)
@@ -124,7 +124,7 @@ class RCNN(nn.Module):
             # loss for categorical component
             pos_prob = F.softmax(logits[fg_masks], dim=1)
             pos_logprob = F.log_softmax(logits[fg_masks], dim=1) 
-            categorical_loss = - (pos_prob * pos_logprob).sum(dim=1) - np.log(0.5)
+            categorical_loss = (pos_prob * pos_logprob).sum(dim=1) - np.log(0.5)
 
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer

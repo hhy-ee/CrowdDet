@@ -104,9 +104,9 @@ class RetinaNet_Criteria(nn.Module):
         loss_cls = loss_cls.sum() / self.loss_normalizer
         loss_dis = loss_dis.sum() / self.loss_normalizer
         loss_dict = {}
-        loss_dict['retina_focal_loss'] = loss_cls
-        loss_dict['retina_smooth_l1'] = loss_reg
-        loss_dict['retina_dist_loss'] = loss_dis
+        loss_dict['atss_focal_loss'] = loss_cls
+        loss_dict['atss_smooth_l1'] = loss_reg
+        loss_dict['atss_dist_loss'] = loss_dis
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -203,11 +203,11 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
             inds = inds.flatten()
             keep_anchors.append(anchors[inds])
-            keep_cls.append(torch.sigmoid(pred_cls[inds]))
+            keep_cls.append(pred_cls[inds])
             keep_reg.append(pred_reg[inds])
         else:
             keep_anchors.append(anchors)
-            keep_cls.append(torch.sigmoid(pred_cls))
+            keep_cls.append(pred_cls)
             keep_reg.append(pred_reg)
     keep_anchors = torch.cat(keep_anchors, axis = 0)
     keep_cls = torch.cat(keep_cls, axis = 0)
