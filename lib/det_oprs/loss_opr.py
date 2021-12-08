@@ -86,6 +86,13 @@ def smooth_l1_loss(pred, target, beta: float):
         loss = torch.where(in_mask, 0.5 * abs_x ** 2 / beta, abs_x - 0.5 * beta)
     return loss.sum(axis=1)
 
+def giou_loss(pred, target, anchor):
+    pred_boxes = bbox_transform_inv_opr(anchor, pred)
+    target_boxes = bbox_transform_inv_opr(anchor, target)
+    gious = align_box_giou_opr(pred_boxes, target_boxes)
+    loss = 1 - gious
+    return loss
+
 def dfl_xywh_loss(pred, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     pred = pred.reshape(-1, pred.shape[-1])
@@ -113,8 +120,6 @@ def kl_kdn_loss(pred, target, loss_weight):
     pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
     loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
         weight_right.mul(torch.log((weight_right + EPS) / (pred_weight_right + EPS)))
-    if not torch.isfinite(loss).all():
-            a = 1
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def kl_kdn_loss_complete(pred, target, loss_weight):
