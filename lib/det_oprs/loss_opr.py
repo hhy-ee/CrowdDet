@@ -308,6 +308,11 @@ def kldiv_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_mean.pow(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean()
 
+def kldivergence_loss(pred, target, kl_weight):
+    mean, lstd = torch.split(pred, 4, dim=1)
+    loss = (mean - target).pow(2) / 2 / lstd.mul(2).exp() + lstd.exp()
+    return kl_weight * loss.sum(dim=1)
+
 def kldiv_nvpd_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean()
