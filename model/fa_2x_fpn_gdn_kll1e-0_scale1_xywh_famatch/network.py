@@ -10,8 +10,8 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.my_loss_opr import freeanchor_loss
 from det_oprs.loss_opr import dfl_xywh_loss
+from det_oprs.my_loss_opr import freeanchor_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -81,7 +81,7 @@ class RetinaNet_Criteria(nn.Module):
         # freeanchor loss
         loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_delta, gt_boxes, im_info)
         # get ground truth
-        labels, bbox_target = fa_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
+        labels, bbox_target = fa_anchor_target(all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
         # regression loss
         fg_mask = (labels > 0).flatten()
         loss_dis = dfl_xywh_loss(
@@ -93,7 +93,7 @@ class RetinaNet_Criteria(nn.Module):
             1 - self.loss_normalizer_momentum
             ) * max(num_pos_anchors, 1)
         loss_dis = loss_dis.sum() / self.loss_normalizer
-        loss_dict['retina_dist_loss'] = loss_dis
+        loss_dict['freeanchor_dist_loss'] = loss_dis
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
