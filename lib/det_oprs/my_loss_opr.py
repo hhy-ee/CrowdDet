@@ -18,7 +18,7 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     box_prob = []
     num_pos = 0
     positive_losses = []
-    for _, (gt_labels_, gt_bboxes_, cls_prob_,bbox_preds_) in \
+    for _, (gt_labels_, gt_bboxes_, cls_prob_, bbox_preds_) in \
                         enumerate(zip(gt_labels, gt_bboxes, cls_prob, bbox_preds)):
         with torch.no_grad():
             if len(gt_bboxes_) == 0:
@@ -91,10 +91,11 @@ def freeanchor_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     }
     return losses
 
-def freeanchor_nneg_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
+def freeanchor_vpd_loss(anchors, cls_prob, bbox_preds, bbox_vpd_preds, gt_boxes, im_info):
     gt_labels, gt_bboxes = [], []
     cls_prob = cls_prob.reshape(config.train_batch_per_gpu, -1, config.num_classes-1)
     bbox_preds = bbox_preds.reshape(config.train_batch_per_gpu, -1, 4)
+    bbox_vpd_preds = bbox_vpd_preds.reshape(config.train_batch_per_gpu, -1, 4)
     gt_boxes = [gt_boxes[bid, :int(im_info[bid, 5]), :] for bid in range(config.train_batch_per_gpu)]
     for gt_box in gt_boxes:
         obj_mask = torch.where(gt_box[:, -1] == 1)[0] 
@@ -103,8 +104,8 @@ def freeanchor_nneg_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     box_prob = []
     num_pos = 0
     positive_losses = []
-    for _, (gt_labels_, gt_bboxes_, cls_prob_,bbox_preds_) in \
-                        enumerate(zip(gt_labels, gt_bboxes, cls_prob, bbox_preds)):
+    for _, (gt_labels_, gt_bboxes_, cls_prob_, bbox_preds_, bbox_vpd_preds_) in \
+                        enumerate(zip(gt_labels, gt_bboxes, cls_prob, bbox_preds, bbox_vpd_preds)):
         with torch.no_grad():
             if len(gt_bboxes_) == 0:
                 image_box_prob = torch.zeros(anchors.size(0), config.num_classes-1).type_as(bbox_preds_)
@@ -151,7 +152,7 @@ def freeanchor_nneg_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
                             gt_labels_.view(-1, 1, 1).repeat(1, config.pre_anchor_topk, 1)).squeeze(2)
 
         # matched_box_prob: P_{ij}^{loc}
-        pred_boxes = bbox_transform_inv_opr(anchors, bbox_preds_)
+        pred_boxes = bbox_transform_inv_opr(anchors, bbox_vpd_preds_)
         object_box_iou = box_overlap_opr(gt_bboxes_, pred_boxes)
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
         num_pos = num_pos + len(gt_bboxes_)
@@ -163,7 +164,7 @@ def freeanchor_nneg_loss(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
 
     # negative_loss:
     # \sum_{j}{ FL((1 - P{a_{j} \in A_{+}}) * (1 - P_{j}^{bg})) } / n||B||
-    negative_loss = new_negative_bag_loss(cls_prob, box_prob).sum() / max(1, num_pos * config.pre_anchor_topk)
+    negative_loss = negative_bag_loss(cls_prob, box_prob).sum() / max(1, num_pos * config.pre_anchor_topk)
 
     # avoid the absence of gradients in regression subnet
     # when no ground-truth in a batch
@@ -436,13 +437,4 @@ def negative_bag_loss(cls_prob, box_prob):
     prob = prob.clamp(min=EPS, max=1 - EPS)
     negative_bag_loss = prob**config.loss_box_gamma * F.binary_cross_entropy(
         prob, torch.zeros_like(prob), reduction='none')
-    return (1 - config.loss_box_alpha) * negative_bag_loss
-
-def new_negative_bag_loss(cls_prob, box_prob):
-    prob = cls_prob * box_prob
-    # There are some cases when neg_prob = 0.
-    # This will cause the neg_prob.log() to be inf without clamp.
-    prob = prob.clamp(min=EPS, max=1 - EPS)
-    negative_bag_loss = prob**config.loss_box_gamma * F.binary_cross_entropy(
-        prob, torch.ones_like(prob), reduction='none')
     return (1 - config.loss_box_alpha) * negative_bag_loss
