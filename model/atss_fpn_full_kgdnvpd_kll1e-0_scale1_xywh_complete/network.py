@@ -78,7 +78,6 @@ class RetinaNet_Criteria(nn.Module):
         # variational inference
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(all_pred_reg) + 1e-10) + 1e-10)
         gumbel_weight = F.softmax((gumbel_sample + all_pred_reg) / config.gumbel_temperature, dim=2)
-        weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
         all_pred_delta = gumbel_weight.mul(project).sum(dim=2)
         # get ground truth
