@@ -192,8 +192,6 @@ class RetinaNet_Head(nn.Module):
             cls_score = cls_score.sigmoid() * quality_score
             pred_cls.append(cls_score)
             pred_reg.append(bbox_pred)
-            pred_cls.append(self.cls_score(self.cls_subnet(feature)))
-            pred_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
             pred_ctn.append(self.centerness_pred(self.bbox_subnet(feature)))
         # reshape the predictions
         assert pred_cls[0].dim() == 4
