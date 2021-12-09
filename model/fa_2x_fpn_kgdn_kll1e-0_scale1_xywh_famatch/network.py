@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import kl_kdn_loss_complete
+from det_oprs.loss_opr import kl_kdn_loss
 from det_oprs.my_loss_opr import freeanchor_loss
 from det_oprs.utils import get_padded_tensor
 
@@ -84,8 +84,8 @@ class RetinaNet_Criteria(nn.Module):
         labels, bbox_target = fa_anchor_target(all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
         # regression loss
         fg_mask = (labels > 0).flatten()
-        loss_kl = kl_kdn_loss_complete(
-                gumbel_weight[fg_mask], 
+        loss_kl = kl_kdn_loss(
+                all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()
@@ -123,7 +123,7 @@ class RetinaNet_Head(nn.Module):
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
-        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
+        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score,
                         self.bbox_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):

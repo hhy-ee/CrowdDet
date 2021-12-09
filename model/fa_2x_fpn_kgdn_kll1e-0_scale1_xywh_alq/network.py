@@ -77,14 +77,15 @@ class RetinaNet_Criteria(nn.Module):
         # variational inference
         gumbel_weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
-        all_pred_gumbel_delta = gumbel_weight.mul(project).sum(dim=2)
+        all_pred_delta = gumbel_weight.mul(project).sum(dim=2)
         # freeanchor loss
-        loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_gumbel_delta, gt_boxes, im_info)
-        # kl loss
+        loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_delta, gt_boxes, im_info)
+        # get ground truth
         labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
+        # regression loss
         fg_mask = (labels > 0).flatten()
         loss_kl = kl_kdn_loss(
-                all_pred_reg[fg_mask], 
+                all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()
@@ -122,7 +123,8 @@ class RetinaNet_Head(nn.Module):
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
-        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, self.bbox_pred]:
+        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score,
+                        self.bbox_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
@@ -138,6 +140,7 @@ class RetinaNet_Head(nn.Module):
         for feature in features:
             pred_cls.append(self.cls_score(self.cls_subnet(feature)))
             pred_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+
         # reshape the predictions
         assert pred_cls[0].dim() == 4
         pred_cls_list = [
