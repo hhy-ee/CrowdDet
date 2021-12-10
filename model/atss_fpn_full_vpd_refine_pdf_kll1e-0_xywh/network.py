@@ -76,7 +76,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_lstd = all_pred_dist[:, :4]
+        all_pred_lstd = all_pred_dist[:, 4:]
         all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
         # get ground truth
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)

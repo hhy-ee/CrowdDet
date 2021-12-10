@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, giou_loss, kldivergence_loss
+from det_oprs.loss_opr import focal_loss, giou_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -74,11 +74,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_ctn = torch.cat(pred_ctn_list, axis=1).reshape(-1)
-        all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
-        # gaussian reparameterzation
-        all_pred_mean = all_pred_dist[:, :4]
-        all_pred_lstd = all_pred_dist[:, 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4)
         # get ground truth
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
@@ -97,10 +93,6 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_kld = kldivergence_loss(
-                all_pred_dist[fg_mask],
-                bbox_target[fg_mask],
-                config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
@@ -108,12 +100,10 @@ class RetinaNet_Criteria(nn.Module):
         loss_ctn = loss_ctn.sum() / self.loss_normalizer
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
-        loss_kld = loss_kld.sum() / self.loss_normalizer
         loss_dict = {}
         loss_dict['atss_focal_loss'] = loss_cls
         loss_dict['atss_smooth_l1'] = loss_reg
         loss_dict['atss_centerness'] = loss_ctn
-        loss_dict['atss_loss_kld'] = loss_kld
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
@@ -139,7 +129,7 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * (config.num_classes-1),
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
-            in_channels, config.num_cell_anchors * 8,
+            in_channels, config.num_cell_anchors * 4,
             kernel_size=3, stride=1, padding=1)
         self.centerness_pred = nn.Conv2d(
             in_channels, config.num_cell_anchors * 1,
@@ -170,7 +160,7 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4)
             for _ in pred_reg]
         pred_ctn_list = [
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 1)
@@ -185,7 +175,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_lis
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 8)[:, :4]
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 4)
         pred_ctn = pred_ctn_list[l_id][0].reshape(-1, 1)
         pred_scr = torch.sigmoid(pred_cls) * torch.sigmoid(pred_ctn)
         if len(anchors) > config.test_layer_topk:
