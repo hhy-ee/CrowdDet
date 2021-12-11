@@ -313,6 +313,14 @@ def kldivergence_loss(pred, target, kl_weight):
     loss = (mean - target).pow(2) / 2 / lstd.mul(2).exp() + lstd.exp()
     return kl_weight * loss.sum(dim=1)
 
+def smooth_kl_loss(pred, target, kl_weight, beta: float):
+    mean, lstd = torch.split(pred, 4, dim=1)
+    abs_x = torch.abs(mean - target)
+    in_mask = abs_x < beta
+    mean_loss = torch.where(in_mask, abs_x ** 2, abs_x + beta**2 - beta)
+    loss = mean_loss / 2 / lstd.mul(2).exp() + lstd
+    return kl_weight * loss.sum(dim=1)
+
 def kldiv_nvpd_loss(pred_mean, pred_lstd, kl_weight):
     loss = (1 + pred_lstd.mul(2) - pred_lstd.mul(2).exp()).mul(-0.5)
     return kl_weight * loss.mean()
