@@ -140,7 +140,7 @@ def kl_kdn_loss_complete(pred, target, loss_weight):
 def kl_gmm_loss(prob, mean, lstd, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     acc = 1 / scale / 2
-    target = (target.reshape(-1, 1) + config.project[0,-1]) * scale
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
     target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
     idx_left = target.long()
     idx_right = idx_left + 1
@@ -148,8 +148,8 @@ def kl_gmm_loss(prob, mean, lstd, target, loss_weight):
     weight_right = target - idx_left.float()
     # GMM discreting
     Qgmm = torch.distributions.normal.Normal(mean, lstd.exp())
-    dis_left = torch.gather(mean, 1, idx_left)
-    dis_right = torch.gather(mean, 1, idx_right)
+    dis_left = torch.gather(mean, 1, idx_left.reshape(-1, 1))
+    dis_right = torch.gather(mean, 1, idx_right.reshape(-1, 1))
     pred_weight_left = Qgmm.cdf(dis_left + acc).mul(prob).sum(1) - \
         Qgmm.cdf(dis_left - acc).mul(prob).sum(1)
     pred_weight_right = Qgmm.cdf(dis_right + acc).mul(prob).sum(1) - \
