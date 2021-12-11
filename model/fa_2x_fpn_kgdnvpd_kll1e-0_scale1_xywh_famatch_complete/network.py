@@ -11,7 +11,7 @@ from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import kl_kdn_loss_complete
-from det_oprs.my_loss_opr import freeanchor_loss
+from det_oprs.my_loss_opr import freeanchor_vpd_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -80,10 +80,14 @@ class RetinaNet_Criteria(nn.Module):
         weight = F.softmax(all_pred_reg, dim=2)
         project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
         all_pred_gumbel_delta = gumbel_weight.mul(project).sum(dim=2)
+        all_pred_delta = weight.mul(project).sum(dim=2)
         # freeanchor loss
-        loss_dict = freeanchor_loss(all_anchors, all_pred_cls, all_pred_gumbel_delta, gt_boxes, im_info)
+        loss_dict = freeanchor_vpd_loss(
+            all_anchors, all_pred_cls, all_pred_delta, 
+            all_pred_gumbel_delta, gt_boxes, im_info)
         # kl loss
-        labels, bbox_target = fa_anchor_target(all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
+        labels, bbox_target = fa_anchor_target(
+            all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
         fg_mask = (labels > 0).flatten()
         loss_kl = kl_kdn_loss_complete(
                 gumbel_weight[fg_mask], 
