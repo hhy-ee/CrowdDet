@@ -46,13 +46,13 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 3.125e-4 * 2
+    base_lr = 3.125e-4 / 2
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
     warm_iter = 800
-    max_epoch = 24
-    lr_decay = [16, 22]
+    max_epoch = 30
+    lr_decay = [24, 27]
     nr_images_epoch = 15000
     log_dump_interval = 20
 
@@ -81,14 +81,8 @@ class Config:
     positive_thresh = 0.5
     allow_low_quality = True
     save_data = False
-    add_test_noise = False
 
-    # ----------freeanchor config---------- #
-    bbox_thr = 0.6
-    pre_anchor_topk = 50
-    loss_box_alpha = 0.5
-    loss_box_gamma = 2.0
+    # -------------atss-config --------------------#
     kl_weight = 1.0
-    gumbel_temperature = 1.0
-    project = np.linspace(-1, 1, 21)[None, :]
+    stat_mode = 'std'
 config = Config()
