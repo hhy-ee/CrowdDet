@@ -119,7 +119,7 @@ def kl_kdn_loss(pred, target, loss_weight):
     pred_weight_left = (pred, 1, dis_left.reshape(-1,1)).reshape(-1)
     pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
     loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
-        weight_right.mul(torch.log((weight_right + EPS) / (pred_weight_right + EPS)))
+        weight_right * torch.log((weight_right + EPS) / (pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def kl_kdn_loss_complete(pred, target, loss_weight):
@@ -133,8 +133,30 @@ def kl_kdn_loss_complete(pred, target, loss_weight):
     weight_right = target - dis_left.float()
     pred_weight_left = torch.gather(pred, 1, dis_left.reshape(-1,1)).reshape(-1)
     pred_weight_right = torch.gather(pred, 1, dis_right.reshape(-1,1)).reshape(-1)
-    loss = weight_left * torch.log((weight_left + EPS) / pred_weight_left + EPS) + \
-        weight_right.mul(torch.log((weight_right + EPS) / pred_weight_right + EPS))
+    loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
+        weight_right * torch.log((weight_right + EPS) / (pred_weight_right + EPS))
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+def kl_gaussian_loss(dist, target, loss_weight):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # GMM discreting
+    mean= dist[:, :4].reshape(-1, 1)
+    lstd= dist[:, 4:].reshape(-1, 1)
+    Qg = torch.distributions.normal.Normal(mean, lstd.exp())
+    project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0],1)
+    dis_left = torch.gather(project, 1, idx_left.reshape(-1, 1))
+    dis_right = torch.gather(project, 1, idx_right.reshape(-1, 1))
+    pred_weight_left = Qg.cdf(dis_left + acc) - Qg.cdf(dis_left - acc)
+    pred_weight_right = Qg.cdf(dis_right + acc) - Qg.cdf(dis_right - acc)
+    loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left.reshape(-1) + EPS)) + \
+        weight_right * torch.log((weight_right + EPS) / (pred_weight_right.reshape(-1) + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def kl_gmm_loss(prob, mean, lstd, target, loss_weight):
@@ -154,8 +176,8 @@ def kl_gmm_loss(prob, mean, lstd, target, loss_weight):
         Qgmm.cdf(dis_left - acc).mul(prob).sum(1)
     pred_weight_right = Qgmm.cdf(dis_right + acc).mul(prob).sum(1) - \
         Qgmm.cdf(dis_right - acc).mul(prob).sum(1)
-    loss = weight_left * torch.log((weight_left + EPS) / pred_weight_left + EPS) + \
-        weight_right.mul(torch.log((weight_right + EPS) / pred_weight_right + EPS))
+    loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
+        weight_right * torch.log((weight_right + EPS) / (pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def nflow_dist_loss(pred, target, loss_weight):
@@ -184,7 +206,7 @@ def nflow_dist_loss(pred, target, loss_weight):
         pred_log_pdf -= torch.log(torch.abs(1 + psi * nf_u[:, l]))
     pred_weight_left, pred_weight_right = torch.split(pred_log_pdf.exp() * config.acc, 1, dim=1)
     loss = target_weight_left * torch.log((target_weight_left + EPS) / (pred_weight_left + EPS)) + \
-        target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
+        target_weight_right * torch.log((target_weight_right + EPS) / (pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def nflow_dist_loss1(pred, target, loss_weight):
@@ -215,7 +237,7 @@ def nflow_dist_loss1(pred, target, loss_weight):
         pred_log_pdf = pred_log_pdf - torch.log(torch.abs(1 + psi * nf_u[:, l]))
     pred_weight_left, pred_weight_right = torch.split(pred_log_pdf.exp() * config.target_acc, 1, dim=1)
     loss = target_weight_left * torch.log((target_weight_left + EPS) / (pred_weight_left + EPS)) + \
-        target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
+        target_weight_right * torch.log((target_weight_right + EPS) / (pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def nflow_dist_loss2(pred, flow1, target, loss_weight):
@@ -247,7 +269,7 @@ def nflow_dist_loss2(pred, flow1, target, loss_weight):
         pred_log_pdf = pred_log_pdf - torch.log(torch.abs(1 + psi * nf_u[:, l]))
     pred_weight_left, pred_weight_right = torch.split(pred_log_pdf.exp() * config.target_acc, 1, dim=1)
     loss = target_weight_left * torch.log((target_weight_left + EPS) / (pred_weight_left + EPS)) + \
-        target_weight_right.mul(torch.log((target_weight_right + EPS) / (pred_weight_right + EPS)))
+        target_weight_right * torch.log((target_weight_right + EPS) / (pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
