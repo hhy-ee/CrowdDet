@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, smooth_kl_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kl_gaussian_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -90,11 +90,10 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_kld = smooth_kl_loss(
+        loss_kld = kl_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
-                config.kl_weight,
-                config.smooth_l1_beta)
+                config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
@@ -118,6 +117,8 @@ class RetinaNet_Head(nn.Module):
             ref_channels = 4
         elif config.stat_mode == 'pdf':
             ref_channels = 20
+        elif config.stat_mode == 'stdpdf':
+            ref_channels = 24
         cls_subnet = []
         bbox_subnet = []
         for _ in range(num_convs):
@@ -178,6 +179,18 @@ class RetinaNet_Head(nn.Module):
                 prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
                 stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
                 stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+            elif config.stat_mode == 'stdpdf':
+                N, _, H, W = bbox_pred.size()
+                mean = bbox_pred[:, :4].permute(0,2,3,1).reshape(-1, 1)
+                lstd = bbox_pred[:, 4:].permute(0,2,3,1).reshape(-1, 1)
+                q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+                project = torch.tensor(config.project).type_as(bbox_pred)
+                prob = q0.log_prob(project.repeat(mean.shape[0], 1))
+                prob_topk, _ = prob.exp().topk(config.reg_topk, dim=1)
+                prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
+                stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
+                stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+                stat = torch.cat([stat, bbox_pred[:, 4:]], dim=1)
             quality_score = self.reg_conf(stat)
             cls_score = cls_score.sigmoid() * quality_score
             pred_cls.append(cls_score)
