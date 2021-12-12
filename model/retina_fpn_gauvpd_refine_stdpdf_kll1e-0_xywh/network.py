@@ -117,6 +117,8 @@ class RetinaNet_Head(nn.Module):
             ref_channels = 4
         elif config.stat_mode == 'pdf':
             ref_channels = 20
+        elif config.stat_mode == 'stdpdf':
+            ref_channels = 24
         cls_subnet = []
         bbox_subnet = []
         for _ in range(num_convs):
@@ -177,6 +179,18 @@ class RetinaNet_Head(nn.Module):
                 prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
                 stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
                 stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+            elif config.stat_mode == 'stdpdf':
+                N, _, H, W = bbox_pred.size()
+                mean = bbox_pred[:, :4].permute(0,2,3,1).reshape(-1, 1)
+                lstd = bbox_pred[:, 4:].permute(0,2,3,1).reshape(-1, 1)
+                q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+                project = torch.tensor(config.project).type_as(bbox_pred)
+                prob = q0.log_prob(project.repeat(mean.shape[0], 1))
+                prob_topk, _ = prob.exp().topk(config.reg_topk, dim=1)
+                prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
+                stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
+                stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+                stat = torch.cat([stat, bbox_pred[:, 4:]], dim=1)
             quality_score = self.reg_conf(stat)
             cls_score = cls_score.sigmoid() * quality_score
             pred_cls.append(cls_score)
