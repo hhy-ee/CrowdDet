@@ -76,8 +76,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_lstd = all_pred_dist[:, 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        all_pred_reg = all_pred_mean
         # freeanchor loss
         loss_dict = freeanchor_vpd_loss(
             all_anchors, all_pred_cls, all_pred_mean, 
@@ -90,6 +89,11 @@ class RetinaNet_Criteria(nn.Module):
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
+        num_pos_anchors = fg_mask.sum().item()
+        self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
+            1 - self.loss_normalizer_momentum
+            ) * max(num_pos_anchors, 1)
+        loss_kld = loss_kld.sum() / self.loss_normalizer
         loss_dict['freeanchor_kldiv_loss'] = loss_kld
         return loss_dict
 

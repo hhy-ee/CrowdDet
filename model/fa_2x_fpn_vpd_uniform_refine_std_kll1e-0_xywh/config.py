@@ -88,7 +88,8 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
-    kl_weight = 1.0
+    kl_weight = 0.5
     project = np.linspace(-1, 1, 21)[None, :]
+    stat_mode = 'std'
     
 config = Config()
