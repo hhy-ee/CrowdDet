@@ -86,8 +86,8 @@ class RetinaNet_Criteria(nn.Module):
         # variational inference
         project_mean = torch.tensor(config.project).type_as(all_pred_reg).repeat(gumbel_weight.shape[0], 1)
         pos_pred_lstd = all_pred_reg[..., n_component:][fg_mask].reshape(-1, n_component)
-        pos_pred_mean = project_mean + pos_pred_lstd.exp() * torch.randn_like(project_mean)
-        pos_pred_delta = gumbel_weight.mul(pos_pred_mean).sum(dim=1).reshape(-1, 4)
+        pos_pred_delta = project_mean + pos_pred_lstd.exp() * torch.randn_like(project_mean)
+        pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
         # regression loss
         loss_reg = smooth_l1_loss(
                 pos_pred_delta,
@@ -99,8 +99,8 @@ class RetinaNet_Criteria(nn.Module):
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
         loss_dis = kl_gmm_loss(
-                gumbel_weight,
-                pos_pred_mean,
+                pos_weight,
+                project_mean,
                 pos_pred_lstd, 
                 bbox_target[fg_mask],
                 config.kl_weight)
