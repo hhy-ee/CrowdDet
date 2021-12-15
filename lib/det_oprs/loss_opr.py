@@ -157,7 +157,7 @@ def kl_gaussian_loss(dist, target, loss_weight):
     pred_weight_right = Qg.cdf(dis_right + acc) - Qg.cdf(dis_right - acc)
     loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left.reshape(-1) + EPS)) + \
         weight_right * torch.log((weight_right + EPS) / (pred_weight_right.reshape(-1) + EPS))
-    return loss.reshape(-1, 4).mean(dim=1) * loss_weight
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def kl_gmm_loss(prob, mean, lstd, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
