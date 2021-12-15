@@ -82,9 +82,9 @@ class Config:
     allow_low_quality = True
     save_data = False
 
-    # -------------atss-config --------------------#
-    ignore_ioa_thr = 0.5
-    assign_topk = 9
-    kl_weight = 1.0
-    project = np.linspace(-1, 1, 21)[None, :]
+    # ----------freeanchor config---------- #
+    kl_weight = 1e-2
+    gumbel_temperature = 1.0
+    project = np.linspace(-1, 1, 11)[None, :]
+
 config = Config()
