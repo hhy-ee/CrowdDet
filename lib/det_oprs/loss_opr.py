@@ -178,7 +178,7 @@ def kl_gmm_loss(prob, mean, lstd, target, loss_weight):
         Qgmm.cdf(dis_right - acc).mul(prob).sum(1)
     loss = weight_left * torch.log((weight_left + EPS) / (pred_weight_left + EPS)) + \
         weight_right * torch.log((weight_right + EPS) / (pred_weight_right + EPS))
-    return loss.reshape(-1, 4).mean(dim=1) * loss_weight
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def nflow_dist_loss(pred, target, loss_weight):
     # Discretize target
