@@ -353,7 +353,7 @@ def kldiv_loss(pred_mean, pred_lstd, kl_weight):
 
 def kldivergence_loss(pred, target, kl_weight):
     mean, lstd = torch.split(pred, 4, dim=1)
-    loss = (mean - target).pow(2) / 2 / lstd.mul(2).exp() + lstd.exp()
+    loss = (mean - target).pow(2) / 2 / lstd.mul(2).exp() + lstd
     return kl_weight * loss.sum(dim=1)
 
 def smooth_kl_loss(pred, target, kl_weight, beta: float):
