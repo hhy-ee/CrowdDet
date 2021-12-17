@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, giou_loss, kldivergence_loss
+from det_oprs.loss_opr import focal_loss, giou_loss, kl_gaussian_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -77,8 +77,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_lstd = all_pred_dist[:, 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        all_pred_reg = all_pred_mean
         # get ground truth
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
@@ -97,7 +96,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_kld = kldivergence_loss(
+        loss_kld = kl_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
