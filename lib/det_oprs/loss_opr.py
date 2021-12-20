@@ -84,7 +84,7 @@ def smooth_l1_loss(pred, target, beta: float):
         abs_x = torch.abs(pred- target)
         in_mask = abs_x < beta
         loss = torch.where(in_mask, 0.5 * abs_x ** 2 / beta, abs_x - 0.5 * beta)
-    return loss.sum(axis=1)
+    return loss.sum(axis=-1)
 
 def giou_loss(pred, target, anchor):
     pred_boxes = bbox_transform_inv_opr(anchor, pred)
