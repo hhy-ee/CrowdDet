@@ -68,8 +68,10 @@ def freeanchor_loss_l1(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
 
         # matched_box_prob: P_{ij}^{loc}
         matched_anchors = anchors[matched]
-        matched_object_targets = bbox_transform_opr(matched_anchors,
-            gt_bboxes_.unsqueeze(dim=1).expand_as(matched_anchors))
+        matched_gt_bboxes = gt_bboxes_.unsqueeze(dim=1).expand_as(matched_anchors)
+        matched_object_targets = bbox_transform_opr(matched_anchors.reshape(-1, 4),
+            matched_gt_bboxes.reshape(-1, 4))
+        matched_object_targets = matched_object_targets.reshape(-1, config.pre_anchor_topk, 4)
         loss_reg = smooth_l1_loss(
                 bbox_preds_[matched],
                 matched_object_targets,
