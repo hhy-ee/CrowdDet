@@ -11,7 +11,7 @@ from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import kl_gaussian_loss
-from det_oprs.my_loss_opr import freeanchor_vpd_loss
+from det_oprs.my_loss_opr import freeanchor_vpd_loss_iou
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -78,7 +78,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_mean = all_pred_dist[:, :4]
         all_pred_reg = all_pred_mean
         # freeanchor loss
-        loss_dict = freeanchor_vpd_loss(
+        loss_dict = freeanchor_vpd_loss_iou(
             all_anchors, all_pred_cls, all_pred_mean, 
             all_pred_reg, gt_boxes, im_info)
         # kl loss
