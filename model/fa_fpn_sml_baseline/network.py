@@ -11,7 +11,7 @@ from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import focal_loss, smooth_l1_loss
-from det_oprs.my_loss_opr import freeanchor_loss_l1
+from det_oprs.my_loss_opr import freeanchor_loss_sml
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -75,7 +75,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4)
         # get ground truth
-        loss_dict = freeanchor_loss_l1(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
+        loss_dict = freeanchor_loss_sml(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
         return loss_dict
 
 class RetinaNet_Head(nn.Module):

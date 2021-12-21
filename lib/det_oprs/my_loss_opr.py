@@ -7,7 +7,7 @@ from config import config
 
 EPS = 1e-12
 
-def freeanchor_loss_l1(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
+def freeanchor_loss_sml(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     gt_labels, gt_bboxes = [], []
     cls_prob = cls_prob.reshape(config.train_batch_per_gpu, -1, config.num_classes-1)
     bbox_preds = bbox_preds.reshape(config.train_batch_per_gpu, -1, 4)
@@ -185,7 +185,7 @@ def freeanchor_loss_iou(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     return losses
 
 
-def freeanchor_vpd_loss_l1(anchors, cls_prob, bbox_preds, bbox_vpd_preds, gt_boxes, im_info):
+def freeanchor_vpd_loss_sml(anchors, cls_prob, bbox_preds, bbox_vpd_preds, gt_boxes, im_info):
     gt_labels, gt_bboxes = [], []
     cls_prob = cls_prob.reshape(config.train_batch_per_gpu, -1, config.num_classes-1)
     bbox_preds = bbox_preds.reshape(config.train_batch_per_gpu, -1, 4)
