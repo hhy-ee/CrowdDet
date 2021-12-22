@@ -126,5 +126,7 @@ def centerness_target(anchors, bbox_targets):
     centerness = torch.sqrt(
         (left_right.min(dim=-1)[0] / left_right.max(dim=-1)[0]) *
         (top_bottom.min(dim=-1)[0] / top_bottom.max(dim=-1)[0]))
+    # edited by hhy
+    centerness[torch.where(torch.isnan(centerness)==True)[0]] = 0
     assert not torch.isnan(centerness).any()
     return centerness
