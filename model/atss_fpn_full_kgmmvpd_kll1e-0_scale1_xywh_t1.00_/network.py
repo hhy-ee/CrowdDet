@@ -78,7 +78,6 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 2 * config.project.shape[1])
         # get ground truth
         labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
-        labels1, bbox_target1 = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
         anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
