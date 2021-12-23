@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, giou_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -84,10 +84,10 @@ class RetinaNet_Criteria(nn.Module):
         # regression loss
         loss_ctn = F.binary_cross_entropy_with_logits(
                 all_pred_ctn[fg_mask], ctn_target)
-        loss_reg = giou_loss( 
+        loss_reg = smooth_l1_loss(
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
-                anchor_target)
+                config.smooth_l1_beta)
         loss_cls = focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
