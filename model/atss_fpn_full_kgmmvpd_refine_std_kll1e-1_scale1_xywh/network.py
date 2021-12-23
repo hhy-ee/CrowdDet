@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, kl_kdn_loss_complete
+from det_oprs.loss_opr import focal_loss, giou_loss, kl_gmm_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -73,33 +73,40 @@ class RetinaNet_Criteria(nn.Module):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_ctn = torch.cat(pred_ctn_list, axis=1).reshape(-1)
-        all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 21)
-        # variational inference
-        gumbel_sample = -torch.log(-torch.log(torch.rand_like(all_pred_reg) + 1e-10) + 1e-10)
-        gumbel_weight = F.softmax((gumbel_sample + all_pred_reg) / config.gumbel_temperature, dim=2)
-        weight = F.softmax(all_pred_reg, dim=2)
-        project = torch.tensor(config.project).type_as(all_pred_reg).repeat(4, 1)
-        all_pred_delta = gumbel_weight.mul(project).sum(dim=2)
+        all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 2 * config.project.shape[1])
         # get ground truth
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
         anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
         ctn_target = centerness_target(anchor_target, bbox_target[fg_mask])
+        # gumbel max
+        n_component = config.project.shape[1]
+        pos_pred_prob = all_pred_dist[..., :n_component][fg_mask].reshape(-1, n_component)
+        gumbel_sample = -torch.log(-torch.log(torch.rand_like(pos_pred_prob) + 1e-10) + 1e-10)
+        gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / config.gumbel_temperature, dim=1)
+        pos_weight = F.softmax(pos_pred_prob, dim=1)
+        # variational inference
+        project_mean = torch.tensor(config.project).type_as(all_pred_dist).repeat(gumbel_weight.shape[0], 1)
+        pos_pred_lstd = all_pred_dist[..., n_component:][fg_mask].reshape(-1, n_component)
+        pos_pred_delta = project_mean + pos_pred_lstd.exp() * torch.randn_like(project_mean)
+        pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
         # regression loss
         loss_ctn = F.binary_cross_entropy_with_logits(
                 all_pred_ctn[fg_mask], ctn_target)
-        loss_reg = smooth_l1_loss(
-                all_pred_delta[fg_mask],
+        loss_reg = giou_loss( 
+                pos_pred_delta,
                 bbox_target[fg_mask],
-                config.smooth_l1_beta)
+                anchor_target)
         loss_cls = focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_dis = kl_kdn_loss_complete(
-                weight[fg_mask], 
+        loss_dis = kl_gmm_loss(
+                pos_weight,
+                project_mean,
+                pos_pred_lstd, 
                 bbox_target[fg_mask],
                 config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()
@@ -123,7 +130,12 @@ class RetinaNet_Head(nn.Module):
         num_convs = 4
         in_channels = 256
         reg_channels = 64
-        ref_channels = 20
+        if config.stat_mode == 'std':
+            ref_channels = 4
+        elif config.stat_mode == 'pdf':
+            ref_channels = 20
+        elif config.stat_mode == 'stdpdf':
+            ref_channels = 24
         cls_subnet = []
         bbox_subnet = []
         for _ in range(num_convs):
@@ -149,7 +161,7 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * (config.num_classes-1),
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
-            in_channels, config.num_cell_anchors * 4 * 21,
+            in_channels, config.num_cell_anchors * 4 * 2 * config.project.shape[1],
             kernel_size=3, stride=1, padding=1)
         self.centerness_pred = nn.Conv2d(
             in_channels, config.num_cell_anchors * 1,
@@ -174,15 +186,39 @@ class RetinaNet_Head(nn.Module):
             cls_score = self.cls_score(self.cls_subnet(feature))
             bbox_pred = self.bbox_pred(self.bbox_subnet(feature))
             # refinement
-            N, C, H, W = bbox_pred.size()
-            prob = F.softmax(bbox_pred.reshape(N, 4, 21, H, W), dim=2)
-            prob_topk, _ = prob.topk(config.reg_topk, dim=2)
-            if config.add_mean:
-                stat = torch.cat([prob_topk, prob_topk.mean(dim=2, keepdim=True)],
-                             dim=2)
-            else:
-                stat = prob_topk
-            quality_score = self.reg_conf(stat.reshape(N, -1, H, W))
+            N, _, H, W = bbox_pred.size()
+            n_component = config.project.shape[1]
+            logit = bbox_pred[:, :n_component].permute(0,2,3,1).reshape(-1, n_component, 1)
+            lstd = bbox_pred[:, n_component:].permute(0,2,3,1).reshape(-1, n_component, 1)
+            mean = torch.tensor(config.project).type_as(logit). \
+                repeat(logit.shape[0], 1).reshape(-1, n_component, 1)
+            q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+
+            if config.stat_mode == 'std':
+                stat = bbox_pred[:, 4:]
+            elif config.stat_mode == 'pdf':
+                
+                
+                
+                project = torch.tensor(config.project).type_as(bbox_pred)
+                prob = q0.log_prob(project.repeat(mean.shape[0], 1))
+                prob_topk, _ = prob.exp().topk(config.reg_topk, dim=1)
+                prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
+                stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
+                stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+            elif config.stat_mode == 'stdpdf':
+                N, _, H, W = bbox_pred.size()
+                mean = bbox_pred[:, :4].permute(0,2,3,1).reshape(-1, 1)
+                lstd = bbox_pred[:, 4:].permute(0,2,3,1).reshape(-1, 1)
+                q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+                project = torch.tensor(config.project).type_as(bbox_pred)
+                prob = q0.log_prob(project.repeat(mean.shape[0], 1))
+                prob_topk, _ = prob.exp().topk(config.reg_topk, dim=1)
+                prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
+                stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
+                stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+                stat = torch.cat([stat, bbox_pred[:, 4:]], dim=1)
+            quality_score = self.reg_conf(stat)
             cls_score = cls_score.sigmoid() * quality_score
             pred_cls.append(cls_score)
             pred_reg.append(bbox_pred)
@@ -193,7 +229,7 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4 * 21)
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4 * 2 * config.project.shape[1])
             for _ in pred_reg]
         pred_ctn_list = [
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 1)
@@ -208,10 +244,10 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_lis
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 4, 21)
-        weight = F.softmax(pred_reg, dim=2)
-        project = torch.tensor(config.project).type_as(pred_reg).repeat(4, 1)
-        pred_reg = weight.mul(project).sum(dim=2)
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 2 * config.project.shape[1])
+        weight = F.softmax(pred_reg[:, :config.project.shape[1]], dim=1)
+        project = torch.tensor(config.project).type_as(pred_reg).repeat(weight.shape[0], 1)
+        pred_reg = weight.mul(project).sum(dim=1).reshape(-1, 4)
         pred_ctn = pred_ctn_list[l_id][0].reshape(-1, 1)
         pred_scr = pred_cls * torch.sigmoid(pred_ctn)
         if len(anchors) > config.test_layer_topk:
@@ -260,3 +296,4 @@ def restore_bbox(rois, deltas, unnormalize=True):
         deltas = deltas + mean_opr
     pred_bbox = bbox_transform_inv_opr(rois, deltas)
     return pred_bbox
+
