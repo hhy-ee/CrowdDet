@@ -85,8 +85,8 @@ class RetinaNet_Criteria(nn.Module):
         n_component = config.project.shape[1]
         pos_pred_prob = all_pred_dist[..., :n_component][fg_mask].reshape(-1, n_component)
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(pos_pred_prob) + 1e-10) + 1e-10)
-        gumbel_temperature = config.gumbel_temperature * np.exp(np.log(config.decay_temp_rate) \
-             / config.max_epoch * epoch)
+        gumbel_temperature = np.maximum(config.gumbel_temperature * np.exp(np.log(config.decay_temp_rate) \
+             / config.decay_temp_epoch * epoch), config.min_temp_gumbel)
         gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / gumbel_temperature, dim=1)
         pos_weight = F.softmax(pos_pred_prob, dim=1)
         # variational inference

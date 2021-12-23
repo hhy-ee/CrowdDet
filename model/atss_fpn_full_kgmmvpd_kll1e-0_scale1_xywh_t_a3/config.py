@@ -86,8 +86,10 @@ class Config:
     ignore_ioa_thr = 0.5
     assign_topk = 9
     kl_weight = 1.0
-    gumbel_temperature = 0.1
-    decay_temp_rate = 0.1
+    gumbel_temperature = 1.0
+    decay_temp_epoch = 15
+    decay_temp_rate = 0.5
+    min_temp_gumbel = 0.5
     project = np.linspace(-1, 1, 11)[None, :]
 
 config = Config()
