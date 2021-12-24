@@ -85,9 +85,11 @@ class Config:
     # -------------atss-config --------------------#
     ignore_ioa_thr = 0.5
     assign_topk = 9
-    kl_weight = 1e-1
+    kl_weight = 1.0
     gumbel_temperature = 1.0
+    decay_temp_epoch = 15
+    decay_temp_rate = 0.1
+    min_temp_gumbel = 0.1
     project = np.linspace(-1, 1, 11)[None, :]
-    reg_topk = 4
-    stat_mode = 'std'
+
 config = Config()
