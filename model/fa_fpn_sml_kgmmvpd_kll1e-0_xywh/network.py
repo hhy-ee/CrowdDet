@@ -93,10 +93,13 @@ class RetinaNet_Criteria(nn.Module):
         labels, bbox_target = fa_anchor_target(
             all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
         fg_mask = (labels > 0).flatten()
+        pos_weight = weight.reshape(-1, 4, n_component)[fg_mask].reshape(-1, n_component)
+        pos_project_mean = project_mean.reshape(-1, 4, n_component)[fg_mask].reshape(-1, n_component)
+        pos_pred_lstd = pred_lstd.reshape(-1, 4, n_component)[fg_mask].reshape(-1, n_component)
         loss_dis = kl_gmm_loss(
-                weight[fg_mask],
-                project_mean[fg_mask],
-                pred_lstd[fg_mask], 
+                pos_weight,
+                pos_project_mean,
+                pos_pred_lstd, 
                 bbox_target[fg_mask],
                 config.kl_weight)
         num_pos_anchors = fg_mask.sum().item()

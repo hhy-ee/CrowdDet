@@ -81,15 +81,10 @@ class Config:
     positive_thresh = 0.5
     allow_low_quality = True
     save_data = False
-    add_test_noise = False
 
     # ----------freeanchor config---------- #
-    bbox_thr = 0.6
-    pre_anchor_topk = 50
-    loss_box_alpha = 0.5
-    loss_box_gamma = 2.0
-    kl_weight = 1.0
+    kl_weight = 2.0
     gumbel_temperature = 1.0
     project = np.linspace(-1, 1, 11)[None, :]
-    
+
 config = Config()
