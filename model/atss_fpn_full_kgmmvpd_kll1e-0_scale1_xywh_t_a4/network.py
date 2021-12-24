@@ -35,7 +35,7 @@ class Network(nn.Module):
         # release the useless data
         if self.training:
             loss_dict = self.R_Criteria(
-                    pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, im_info)
+                    pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, epoch, im_info)
             return loss_dict
         else:
             #pred_bbox = union_inference(
@@ -68,10 +68,11 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = 100 # initialize with any reasonable #fg that's not too small
         self.loss_normalizer_momentum = 0.9
 
-    def __call__(self, pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, im_info):
+    def __call__(self, pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, epoch, im_info):
         num_levels = [int(cls.shape[1]) for cls in pred_cls_list]
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
+        all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_ctn = torch.cat(pred_ctn_list, axis=1).reshape(-1)
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 2 * config.project.shape[1])
         # get ground truth
@@ -84,7 +85,9 @@ class RetinaNet_Criteria(nn.Module):
         n_component = config.project.shape[1]
         pos_pred_prob = all_pred_dist[..., :n_component][fg_mask].reshape(-1, n_component)
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(pos_pred_prob) + 1e-10) + 1e-10)
-        gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / config.gumbel_temperature, dim=1)
+        gumbel_temperature = np.maximum(config.gumbel_temperature * np.exp(np.log(config.decay_temp_rate) \
+             / config.decay_temp_epoch * epoch), config.min_temp_gumbel)
+        gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / gumbel_temperature, dim=1)
         pos_weight = F.softmax(pos_pred_prob, dim=1)
         # variational inference
         project_mean = torch.tensor(config.project).type_as(all_pred_dist).repeat(gumbel_weight.shape[0], 1)
@@ -129,13 +132,6 @@ class RetinaNet_Head(nn.Module):
         super().__init__()
         num_convs = 4
         in_channels = 256
-        reg_channels = 64
-        if config.stat_mode == 'std' or config.stat_mode == 'prb' or config.stat_mode == 'pmf':
-            ref_channels = 16
-        elif config.stat_mode == 'std&prb' or config.stat_mode == 'std&pmf':
-            ref_channels = 32
-        elif config.stat_mode == 'std&prb&pmf':
-            ref_channels = 48
         cls_subnet = []
         bbox_subnet = []
         for _ in range(num_convs):
@@ -149,13 +145,6 @@ class RetinaNet_Head(nn.Module):
             bbox_subnet.append(nn.ReLU(inplace=True))
         self.cls_subnet = nn.Sequential(*cls_subnet)
         self.bbox_subnet = nn.Sequential(*bbox_subnet)
-
-        # refinement
-        conf_vector = [nn.Conv2d(ref_channels, reg_channels, 1)]
-        conf_vector += [nn.ReLU(inplace=True)]
-        conf_vector += [nn.Conv2d(reg_channels, 1, 1), nn.Sigmoid()]
-        self.reg_conf = nn.Sequential(*conf_vector)
-
         # predictor
         self.cls_score = nn.Conv2d(
             in_channels, config.num_cell_anchors * (config.num_classes-1),
@@ -168,7 +157,7 @@ class RetinaNet_Head(nn.Module):
             kernel_size=3, stride=1, padding=1)
         # Initialization
         for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
-                        self.bbox_pred, self.centerness_pred, self.reg_conf]:
+                        self.bbox_pred, self.centerness_pred]:
             for layer in modules.modules():
                 if isinstance(layer, nn.Conv2d):
                     torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
@@ -183,46 +172,8 @@ class RetinaNet_Head(nn.Module):
         pred_reg = []
         pred_ctn = []
         for feature in features:
-            cls_score = self.cls_score(self.cls_subnet(feature))
-            bbox_pred = self.bbox_pred(self.bbox_subnet(feature))
-            # refinement
-            N, _, H, W = bbox_pred.size()
-            n_component = config.project.shape[1]
-            acc = config.project[0,-1] / (config.project.shape[1] - 1) 
-            logit = bbox_pred.permute(0,2,3,1).reshape(-1, n_component*2, 1)[:, :n_component]
-            prob = torch.softmax(logit, dim=1)
-            lstd = bbox_pred.permute(0,2,3,1).reshape(-1, n_component*2, 1)[:, n_component:]
-            mean = torch.tensor(config.project).type_as(logit). \
-                repeat(logit.shape[0], 1).reshape(-1, n_component, 1)
-            q0 = torch.distributions.normal.Normal(mean, lstd.exp())
-            z0 = torch.tensor(config.project).type_as(logit).reshape(1, 1, n_component).\
-                repeat(logit.shape[0], logit.shape[1], 1)
-            pmf = (q0.cdf(z0 + acc) - q0.cdf(z0 - acc)).mul(prob).sum(dim=1, keepdim=False)
-            # pmf refine
-            toppmf, idx = pmf.topk(config.reg_topk, dim=1)
-            toppmf = toppmf.reshape(N, H, W, -1).permute(0, 3, 1, 2)
-            # lstd refine
-            toplstd = torch.gather(lstd.reshape(-1, n_component), dim=1, index=idx)
-            toplstd = toplstd.reshape(N, H, W, -1).permute(0, 3, 1, 2)
-            # prob refine
-            topprob = torch.gather(prob.reshape(-1, n_component), dim=1, index=idx)
-            topprob = topprob.reshape(N, H, W, -1).permute(0, 3, 1, 2)
-            if config.stat_mode == 'std':
-                stat = toplstd
-            elif config.stat_mode == 'prb':
-                stat = topprob
-            elif config.stat_mode == 'pmf':
-                stat = toppmf
-            elif config.stat_mode == 'std&prb':
-                stat = torch.cat([toplstd, topprob], dim=1)
-            elif config.stat_mode == 'std&pmf':
-                stat = torch.cat([toplstd, toppmf], dim=1)
-            elif config.stat_mode == 'std&prb&pmf':
-                stat = torch.cat([toplstd, topprob, toppmf], dim=1)
-            quality_score = self.reg_conf(stat)
-            cls_score = cls_score.sigmoid() * quality_score
-            pred_cls.append(cls_score)
-            pred_reg.append(bbox_pred)
+            pred_cls.append(self.cls_score(self.cls_subnet(feature)))
+            pred_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
             pred_ctn.append(self.centerness_pred(self.bbox_subnet(feature)))
         # reshape the predictions
         assert pred_cls[0].dim() == 4
@@ -250,7 +201,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_lis
         project = torch.tensor(config.project).type_as(pred_reg).repeat(weight.shape[0], 1)
         pred_reg = weight.mul(project).sum(dim=1).reshape(-1, 4)
         pred_ctn = pred_ctn_list[l_id][0].reshape(-1, 1)
-        pred_scr = pred_cls * torch.sigmoid(pred_ctn)
+        pred_scr = torch.sigmoid(pred_cls) * torch.sigmoid(pred_ctn)
         if len(anchors) > config.test_layer_topk:
             ruler = pred_scr.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
