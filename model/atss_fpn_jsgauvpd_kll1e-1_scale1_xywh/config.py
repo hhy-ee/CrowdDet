@@ -85,7 +85,7 @@ class Config:
     # -------------atss-config --------------------#
     ignore_ioa_thr = 0.5
     assign_topk = 9
-    kl_weight = 2.0
+    kl_weight = 1e-1
     project = np.linspace(-2, 2, 21)[None, :]
 
 config = Config()
