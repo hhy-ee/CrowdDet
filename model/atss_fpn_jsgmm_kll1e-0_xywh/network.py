@@ -102,7 +102,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_dis = js_gmm_loss(
+        loss_jsd = js_gmm_loss(
                 pos_weight,
                 project_mean,
                 pos_pred_lstd, 
@@ -115,12 +115,12 @@ class RetinaNet_Criteria(nn.Module):
         loss_ctn = loss_ctn.sum() / self.loss_normalizer
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
-        loss_dis = loss_dis.sum() / self.loss_normalizer
+        loss_jsd = loss_jsd.sum() / self.loss_normalizer
         loss_dict = {}
         loss_dict['atss_focal_loss'] = loss_cls
         loss_dict['atss_smooth_l1'] = loss_reg
         loss_dict['atss_centerness'] = loss_ctn
-        loss_dict['atss_dist_loss'] = loss_dis
+        loss_dict['atss_jsd_loss'] = loss_jsd
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
