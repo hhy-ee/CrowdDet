@@ -111,7 +111,6 @@ def js_gaussian_loss(dist, target, loss_weight):
     pred_dist = Qg.cdf(project + acc) - Qg.cdf(project - acc)
     # JS distance
     total_dist = (target_dist + pred_dist) / 2
-    total_dist = (target_dist + pred_dist) / 2
     loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
     loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
     loss = (loss1 + loss2).sum(dim=1) / 2
@@ -161,7 +160,6 @@ def js_gmm_loss(prob, mean, lstd, target, loss_weight):
     pred_dist = Qgmm.cdf(project + acc).mul(prob).sum(dim=1, keepdim=False) - \
         Qgmm.cdf(project - acc).mul(prob).sum(dim=1, keepdim=False)
     # JS distance
-    total_dist = (target_dist + pred_dist) / 2
     total_dist = (target_dist + pred_dist) / 2
     loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
     loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
