@@ -87,6 +87,8 @@ class Config:
     assign_topk = 9
     kl_weight = 1.0
     project = np.linspace(-2, 2, 21)[None, :]
-    stat_mode = 'std'
+    reg_topk = 4
+    acc = 0.2
+    stat_mode = 'pdf'
 
 config = Config()
