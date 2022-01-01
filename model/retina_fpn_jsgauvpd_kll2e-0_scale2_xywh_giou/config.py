@@ -84,6 +84,6 @@ class Config:
 
     # -------------atss-config --------------------#
     kl_weight = 2.0
-    project = np.linspace(-1, 1, 31)[None, :]
+    project = np.linspace(-1, 1, 21)[None, :]
     
 config = Config()
