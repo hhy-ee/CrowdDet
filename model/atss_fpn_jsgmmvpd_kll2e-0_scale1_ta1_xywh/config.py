@@ -50,7 +50,7 @@ class Config:
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
-    warm_iter = 1600
+    warm_iter = 800
     max_epoch = 30
     lr_decay = [24, 27]
     nr_images_epoch = 15000
@@ -83,7 +83,13 @@ class Config:
     save_data = False
 
     # -------------atss-config --------------------#
+    ignore_ioa_thr = 0.5
+    assign_topk = 9
     kl_weight = 2.0
-    project = np.linspace(-1, 1, 31)[None, :]
-    
+    gumbel_temperature = 4.0
+    decay_temp_epoch = 15
+    decay_temp_rate = 0.5
+    min_temp_gumbel = 2.0
+    project = np.linspace(-1, 1, 11)[None, :]
+
 config = Config()

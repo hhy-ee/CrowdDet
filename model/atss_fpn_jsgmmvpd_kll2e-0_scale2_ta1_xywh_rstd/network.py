@@ -35,7 +35,7 @@ class Network(nn.Module):
         # release the useless data
         if self.training:
             loss_dict = self.R_Criteria(
-                    pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, im_info)
+                    pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, epoch, im_info)
             return loss_dict
         else:
             #pred_bbox = union_inference(
@@ -68,7 +68,7 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = 100 # initialize with any reasonable #fg that's not too small
         self.loss_normalizer_momentum = 0.9
 
-    def __call__(self, pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, im_info):
+    def __call__(self, pred_cls_list, pred_reg_list, pred_ctn_list, anchors_list, gt_boxes, epoch, im_info):
         num_levels = [int(cls.shape[1]) for cls in pred_cls_list]
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
@@ -84,7 +84,9 @@ class RetinaNet_Criteria(nn.Module):
         n_component = config.project.shape[1]
         pos_pred_prob = all_pred_dist[..., :n_component][fg_mask].reshape(-1, n_component)
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(pos_pred_prob) + 1e-10) + 1e-10)
-        gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / config.gumbel_temperature, dim=1)
+        gumbel_temperature = np.maximum(config.gumbel_temperature * np.exp(np.log(config.decay_temp_rate) \
+             / config.decay_temp_epoch * epoch), config.min_temp_gumbel)
+        gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / gumbel_temperature, dim=1)
         pos_weight = F.softmax(pos_pred_prob, dim=1)
         # variational inference
         project_mean = torch.tensor(config.project).type_as(all_pred_dist).repeat(gumbel_weight.shape[0], 1)
