@@ -166,7 +166,7 @@ def js_gmm_loss(prob, mean, lstd, target, loss_weight):
     loss = (loss1 + loss2).sum(dim=1) / 2
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
-def weighted_js_gmm_loss(prob, mean, lstd, target, js_weight, loss_weight):
+def asymmetric_js_gmm_loss(prob, mean, lstd, target, alpha_skew, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     acc = 1 / scale / 2
     target = (target.reshape(-1) + config.project[0,-1]) * scale
@@ -189,10 +189,10 @@ def weighted_js_gmm_loss(prob, mean, lstd, target, js_weight, loss_weight):
     pred_dist = Qgmm.cdf(project + acc).mul(prob).sum(dim=1, keepdim=False) - \
         Qgmm.cdf(project - acc).mul(prob).sum(dim=1, keepdim=False)
     # JS distance
-    total_dist = (target_dist + pred_dist) / 2
+    total_dist = pred_dist * alpha_skew + target_dist * (1 - alpha_skew)
     loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
     loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
-    loss = (loss1 * js_weight + loss2 * (1 - js_weight)).sum(dim=1)
+    loss = (loss1 * alpha_skew + loss2 * (1 - alpha_skew)).sum(dim=1)
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
