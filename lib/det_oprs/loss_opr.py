@@ -166,7 +166,37 @@ def js_gmm_loss(prob, mean, lstd, target, loss_weight):
     loss = (loss1 + loss2).sum(dim=1) / 2
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
-def asymmetric_js_gmm_loss(prob, mean, lstd, target, alpha_skew, loss_weight):
+def js_gmm_loss_(prob, mean, lstd, target, loss_weight):
+    scale = (config.js_project.shape[1] - 1) / 2 / config.js_project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.js_project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.js_project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # target distribution
+    target_dist = weight_left.new_full((weight_left.shape[0], \
+        config.js_project.shape[1]), 0, dtype=torch.float32)
+    target_dist[torch.arange(target_dist.shape[0]), idx_left] = weight_left
+    target_dist[torch.arange(target_dist.shape[0]), idx_right] = weight_right
+    # predict distribution
+    mean = mean.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    lstd = lstd.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    prob = prob.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    Qgmm = torch.distributions.normal.Normal(mean, lstd.exp())
+    js_project = torch.tensor(config.js_project).type_as(mean).reshape(1, 1, -1)
+    js_project = js_project.repeat(mean.shape[0], mean.shape[1], 1)
+    pred_dist = Qgmm.cdf(js_project + acc).mul(prob).sum(dim=1, keepdim=False) - \
+        Qgmm.cdf(js_project - acc).mul(prob).sum(dim=1, keepdim=False)
+    # JS distance
+    total_dist = (target_dist + pred_dist) / 2
+    loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
+    loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
+    loss = (loss1 + loss2).sum(dim=1) / 2
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+def asymmetric_js_gmm_loss(prob, mean, lstd, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     acc = 1 / scale / 2
     target = (target.reshape(-1) + config.project[0,-1]) * scale
@@ -189,10 +219,10 @@ def asymmetric_js_gmm_loss(prob, mean, lstd, target, alpha_skew, loss_weight):
     pred_dist = Qgmm.cdf(project + acc).mul(prob).sum(dim=1, keepdim=False) - \
         Qgmm.cdf(project - acc).mul(prob).sum(dim=1, keepdim=False)
     # JS distance
-    total_dist = pred_dist * alpha_skew + target_dist * (1 - alpha_skew)
+    total_dist = pred_dist * config.alpha_skew + target_dist * (1 - config.alpha_skew)
     loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
     loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
-    loss = (loss1 * alpha_skew + loss2 * (1 - alpha_skew)).sum(dim=1)
+    loss = (loss1 * config.alpha_skew + loss2 * (1 - config.alpha_skew)).sum(dim=1)
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
