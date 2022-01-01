@@ -87,9 +87,9 @@ class Config:
     assign_topk = 9
     kl_weight = 2.0
     gumbel_temperature = 4.0
-    decay_temp_epoch = 30
+    decay_temp_epoch = 15
     decay_temp_rate = 0.5
     min_temp_gumbel = 2.0
-    project = np.linspace(-2, 2, 21)[None, :]
+    project = np.linspace(-1, 1, 11)[None, :]
 
 config = Config()
