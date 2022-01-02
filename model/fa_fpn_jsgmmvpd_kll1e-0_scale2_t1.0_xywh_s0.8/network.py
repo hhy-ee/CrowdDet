@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import weighted_js_gmm_loss
+from det_oprs.loss_opr import asymmetric_js_gmm_loss
 from det_oprs.my_loss_opr import freeanchor_vpd_loss_sml
 from det_oprs.utils import get_padded_tensor
 
@@ -96,12 +96,11 @@ class RetinaNet_Criteria(nn.Module):
         pos_weight = weight.reshape(-1, 4, n_component)[fg_mask].reshape(-1, n_component)
         pos_project_mean = project_mean.reshape(-1, 4, n_component)[fg_mask].reshape(-1, n_component)
         pos_pred_lstd = pred_lstd.reshape(-1, 4, n_component)[fg_mask].reshape(-1, n_component)
-        loss_jsd = weighted_js_gmm_loss(
+        loss_jsd = asymmetric_js_gmm_loss(
                 pos_weight,
                 pos_project_mean,
                 pos_pred_lstd, 
                 bbox_target[fg_mask],
-                config.js_forward,
                 config.js_weight)
         num_pos_anchors = fg_mask.sum().item()
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
