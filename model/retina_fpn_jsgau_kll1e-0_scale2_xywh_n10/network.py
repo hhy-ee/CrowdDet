@@ -75,14 +75,13 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_lstd = all_pred_dist[:, 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        all_pred_reg = all_pred_mean
         # get ground truth
+        gt_boxes[:,:,:4] = gt_boxes[:,:,:4] + config.noise_sigma * torch.randn_like(gt_boxes[:,:,:4])
         labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
         # regression loss
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
-        bbox_target = bbox_target + config.noise_sigma * torch.randn_like(bbox_target)
         loss_reg = smooth_l1_loss(
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
