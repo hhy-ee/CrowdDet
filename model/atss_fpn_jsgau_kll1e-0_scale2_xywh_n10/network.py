@@ -79,6 +79,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_mean = all_pred_dist[:, :4]
         all_pred_reg = all_pred_mean
         # get ground truth
+        gt_boxes[:,:,:4] = gt_boxes[:,:,:4] + config.noise_sigma * torch.randn_like(gt_boxes[:,:,:4])
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
@@ -87,7 +88,6 @@ class RetinaNet_Criteria(nn.Module):
         # regression loss
         loss_ctn = F.binary_cross_entropy_with_logits(
                 all_pred_ctn[fg_mask], ctn_target)
-        bbox_target = bbox_target + config.noise_sigma * torch.randn_like(bbox_target)
         loss_reg = giou_loss( 
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
