@@ -11,7 +11,7 @@ from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import js_gaussian_loss
-from det_oprs.my_loss_opr import freeanchor_vpd_loss_sml_noisy
+from det_oprs.my_loss_opr import freeanchor_vpd_loss_sml
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -76,16 +76,17 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_reg = all_pred_mean
+        all_pred_lstd = all_pred_dist[:, 4:]
+        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
         # freeanchor loss
-        loss_dict = freeanchor_vpd_loss_sml_noisy(
+        gt_boxes[:,:,:4] = gt_boxes[:,:,:4] + config.noise_sigma * torch.randn_like(gt_boxes[:,:,:4])
+        loss_dict = freeanchor_vpd_loss_sml(
             all_anchors, all_pred_cls, all_pred_mean, 
             all_pred_reg, gt_boxes, im_info)
         # kl loss
         labels, bbox_target = fa_anchor_target(
             all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
         fg_mask = (labels > 0).flatten()
-        bbox_target = bbox_target + config.noise_sigma * torch.randn_like(bbox_target)
         loss_jsd = js_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
