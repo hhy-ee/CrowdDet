@@ -90,5 +90,6 @@ class Config:
     loss_box_gamma = 2.0
     kl_weight = 2.0
     project = np.linspace(-1, 1, 21)[None, :]
-    
+    noise_sigma = 0.1
+
 config = Config()
