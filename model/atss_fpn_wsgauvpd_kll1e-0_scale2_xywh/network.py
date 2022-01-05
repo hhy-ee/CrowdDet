@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, giou_loss, js_gaussian_loss
+from det_oprs.loss_opr import focal_loss, giou_loss, ws_gaussian_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -97,7 +97,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_jsd = js_gaussian_loss(
+        loss_wsd = ws_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
@@ -108,12 +108,12 @@ class RetinaNet_Criteria(nn.Module):
         loss_ctn = loss_ctn.sum() / self.loss_normalizer
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
-        loss_jsd = loss_jsd.sum() / self.loss_normalizer
+        loss_wsd = loss_wsd.sum() / self.loss_normalizer
         loss_dict = {}
         loss_dict['atss_focal_loss'] = loss_cls
         loss_dict['atss_smooth_l1'] = loss_reg
         loss_dict['atss_centerness'] = loss_ctn
-        loss_dict['atss_jsd_loss'] = loss_jsd
+        loss_dict['atss_wsd_loss'] = loss_wsd
         return loss_dict
 
 class RetinaNet_Head(nn.Module):

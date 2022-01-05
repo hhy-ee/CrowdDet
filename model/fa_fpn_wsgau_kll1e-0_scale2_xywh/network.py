@@ -85,7 +85,7 @@ class RetinaNet_Criteria(nn.Module):
         labels, bbox_target = fa_anchor_target(
             all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
         fg_mask = (labels > 0).flatten()
-        loss_jsd = ws_gaussian_loss(
+        loss_wsd = ws_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
@@ -93,8 +93,8 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = self.loss_normalizer_momentum * self.loss_normalizer + (
             1 - self.loss_normalizer_momentum
             ) * max(num_pos_anchors, 1)
-        loss_jsd = loss_jsd.sum() / self.loss_normalizer
-        loss_dict['freeanchor_jsdiv_loss'] = loss_jsd
+        loss_wsd = loss_wsd.sum() / self.loss_normalizer
+        loss_dict['freeanchor_wsdiv_loss'] = loss_wsd
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
