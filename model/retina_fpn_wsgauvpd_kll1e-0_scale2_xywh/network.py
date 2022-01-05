@@ -91,7 +91,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_jsd = ws_gaussian_loss(
+        loss_wsd = ws_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
@@ -101,11 +101,11 @@ class RetinaNet_Criteria(nn.Module):
             ) * max(num_pos_anchors, 1)
         loss_reg = loss_reg.sum() / self.loss_normalizer
         loss_cls = loss_cls.sum() / self.loss_normalizer
-        loss_jsd = loss_jsd.sum() / self.loss_normalizer
+        loss_wsd = loss_wsd.sum() / self.loss_normalizer
         loss_dict = {}
         loss_dict['retina_focal_loss'] = loss_cls
         loss_dict['retina_smooth_l1'] = loss_reg
-        loss_dict['retina_loss_jsd'] = loss_jsd
+        loss_dict['retina_loss_wsd'] = loss_wsd
         return loss_dict
 
 class RetinaNet_Head(nn.Module):
