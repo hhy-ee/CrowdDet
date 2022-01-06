@@ -3,6 +3,7 @@ import os
 import sys
 import argparse
 import torch
+import numpy as np
 
 # sys.path.insert(0, '../lib')
 # sys.path.insert(0, '../model')
@@ -167,7 +168,7 @@ def run_train():
     parser.add_argument('--model_dir', '-md', default=None,required=True,type=str)
     parser.add_argument('--resume_weights', '-r', default=None,type=int)
     os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '8888'
+    os.environ['MASTER_PORT'] = '%d'% np.random.randint(1000,9999)
     os.environ['NCCL_IB_DISABLE'] = '1'
     # os.environ['NCCL_DEBUG'] = 'INFO'
 

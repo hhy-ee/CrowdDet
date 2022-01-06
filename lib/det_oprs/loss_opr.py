@@ -189,9 +189,18 @@ def ws_gaussian_loss_(dist, target, loss_weight, p=1):
     lstd= dist[:, 4:].reshape(-1, 1)
     Qg = torch.distributions.normal.Normal(mean, lstd.exp())
     project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0],1)
+    # target distribution
+    u1 = project[torch.arange(mean.shape[0]), idx_left]
+    u2 = project[torch.arange(mean.shape[0]), idx_right]
+    u_left = torch.cat([(u1 - acc).reshape(-1, 1, 1), (u2 - acc).reshape(-1, 1, 1)], dim=2)
+    u_right = torch.cat([(u1 + acc).reshape(-1, 1, 1), (u2 + acc).reshape(-1, 1, 1)], dim=2)
+    uniform = torch.distributions.uniform.Uniform(u_left, u_right)
+    cat = torch.distributions.categorical.Categorical(torch.cat([weight_left.\
+        reshape(-1, 1, 1), weight_right.reshape(-1, 1, 1)], dim=2))
+    target_dist = torch.distributions.mixture_same_family.MixtureSameFamily(cat, uniform)
     # WS distance
     pred_cdf = Qg.cdf(project)
-    target_cdf = torch.cumsum(target_dist, dim=1)
+    target_cdf = target_dist.cdf(project)
     if p == 1:
         loss =  torch.sum(torch.abs(pred_cdf - target_cdf) * acc * 2, dim=1)
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
