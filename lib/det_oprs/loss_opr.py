@@ -180,24 +180,19 @@ def ws_gaussian_loss_(dist, target, loss_weight, p=1):
     weight_left = idx_right.float() - target
     weight_right = target - idx_left.float()
     # target distribution
-    target_dist = weight_left.new_full((weight_left.shape[0], \
-        config.project.shape[1]), 0, dtype=torch.float32)
-    target_dist[torch.arange(target_dist.shape[0]), idx_left] = weight_left
-    target_dist[torch.arange(target_dist.shape[0]), idx_right] = weight_right
-    # predict distribution
-    mean= dist[:, :4].reshape(-1, 1)
-    lstd= dist[:, 4:].reshape(-1, 1)
-    Qg = torch.distributions.normal.Normal(mean, lstd.exp())
-    project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0],1)
-    # target distribution
-    u1 = project[torch.arange(mean.shape[0]), idx_left]
-    u2 = project[torch.arange(mean.shape[0]), idx_right]
+    project = torch.tensor(config.project).type_as(weight_left).repeat(weight_left.shape[0],1)
+    u1 = project[torch.arange(weight_left.shape[0]), idx_left]
+    u2 = project[torch.arange(weight_left.shape[0]), idx_right]
     u_left = torch.cat([(u1 - acc).reshape(-1, 1, 1), (u2 - acc).reshape(-1, 1, 1)], dim=2)
     u_right = torch.cat([(u1 + acc).reshape(-1, 1, 1), (u2 + acc).reshape(-1, 1, 1)], dim=2)
     uniform = torch.distributions.uniform.Uniform(u_left, u_right)
     cat = torch.distributions.categorical.Categorical(torch.cat([weight_left.\
         reshape(-1, 1, 1), weight_right.reshape(-1, 1, 1)], dim=2))
     target_dist = torch.distributions.mixture_same_family.MixtureSameFamily(cat, uniform)
+    # predict distribution
+    mean= dist[:, :4].reshape(-1, 1)
+    lstd= dist[:, 4:].reshape(-1, 1)
+    Qg = torch.distributions.normal.Normal(mean, lstd.exp())
     # WS distance
     pred_cdf = Qg.cdf(project)
     target_cdf = target_dist.cdf(project)
@@ -285,7 +280,6 @@ def js_ngmm_loss(prob, mean, lstd, target, loss_weight):
     loss = (loss1 + loss2).sum(dim=1) / 2
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
-
 def js_gmm_loss_(prob, mean, lstd, target, loss_weight):
     scale = (config.js_project.shape[1] - 1) / 2 / config.js_project[0,-1]
     acc = 1 / scale / 2
@@ -343,6 +337,67 @@ def asymmetric_js_gmm_loss(prob, mean, lstd, target, loss_weight):
     loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
     loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
     loss = (loss1 * config.alpha_skew + loss2 * (1 - config.alpha_skew)).sum(dim=1)
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+def ws_gmm_loss(prob, mean, lstd, target, loss_weight, p=1):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # target distribution
+    target_dist = weight_left.new_full((weight_left.shape[0], \
+        config.project.shape[1]), 0, dtype=torch.float32)
+    target_dist[torch.arange(target_dist.shape[0]), idx_left] = weight_left
+    target_dist[torch.arange(target_dist.shape[0]), idx_right] = weight_right
+    # predict distribution
+    mean = mean.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    lstd = lstd.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    prob = prob.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    Qgmm = torch.distributions.normal.Normal(mean, lstd.exp())
+    project = mean.repeat(1, 1, config.project.shape[1]).permute(0, 2, 1)
+    pred_dist = Qgmm.cdf(project + acc).mul(prob).sum(dim=1, keepdim=False) - \
+        Qgmm.cdf(project - acc).mul(prob).sum(dim=1, keepdim=False)
+    # WS distance
+    pred_cdf = torch.cumsum(pred_dist, dim=1)
+    target_cdf = torch.cumsum(target_dist, dim=1)
+    if p == 1:
+        loss =  torch.sum(torch.abs(pred_cdf - target_cdf) * acc * 2, dim=1)
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+def ws_gmm_loss_(prob, mean, lstd, target, loss_weight, p=1):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # target distribution
+    project = torch.tensor(config.project).type_as(weight_left).repeat(weight_left.shape[0],1)
+    u1 = project[torch.arange(weight_left.shape[0]), idx_left]
+    u2 = project[torch.arange(weight_left.shape[0]), idx_right]
+    u_left = torch.cat([(u1 - acc).reshape(-1, 1, 1), (u2 - acc).reshape(-1, 1, 1)], dim=2)
+    u_right = torch.cat([(u1 + acc).reshape(-1, 1, 1), (u2 + acc).reshape(-1, 1, 1)], dim=2)
+    uniform = torch.distributions.uniform.Uniform(u_left, u_right)
+    cat = torch.distributions.categorical.Categorical(torch.cat([weight_left.\
+        reshape(-1, 1, 1), weight_right.reshape(-1, 1, 1)], dim=2))
+    target_dist = torch.distributions.mixture_same_family.MixtureSameFamily(cat, uniform)
+    # predict distribution
+    mean = mean.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    lstd = lstd.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    prob = prob.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    Qgmm = torch.distributions.normal.Normal(mean, lstd.exp())
+    # WS distance
+    mm_project = mean.repeat(1, 1, config.project.shape[1]).permute(0, 2, 1)
+    pred_cdf = Qgmm.cdf(mm_project).mul(prob).sum(dim=1)
+    target_cdf = target_dist.cdf(project)
+    if p == 1:
+        loss =  torch.sum(torch.abs(pred_cdf - target_cdf) * acc * 2, dim=1)
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def focal_loss(inputs, targets, alpha=-1, gamma=2, eps=1e-8):
