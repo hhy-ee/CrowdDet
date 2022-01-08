@@ -255,6 +255,37 @@ def js_gmm_loss(prob, mean, lstd, target, loss_weight):
     loss = (loss1 + loss2).sum(dim=1) / 2
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
+def js_ngmm_loss(prob, mean, lstd, target, loss_weight):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # target distribution
+    target_dist = weight_left.new_full((weight_left.shape[0], \
+        config.project.shape[1]), 0, dtype=torch.float32)
+    target_dist[torch.arange(target_dist.shape[0]), idx_left] = weight_left
+    target_dist[torch.arange(target_dist.shape[0]), idx_right] = weight_right
+    # predict distribution
+    mean = mean.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    lstd = lstd.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    prob = prob.reshape(weight_left.shape[0], config.project.shape[1], 1)
+    Qgmm = torch.distributions.normal.Normal(mean, lstd.exp())
+    project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0], 1)
+    project = project.repeat(1, mean.shape[1]).reshape(mean.shape[0], mean.shape[1], -1)
+    pred_dist = Qgmm.cdf(project + acc).mul(prob).sum(dim=1) - \
+        Qgmm.cdf(project - acc).mul(prob).sum(dim=1)
+    # JS distance
+    total_dist = (target_dist + pred_dist) / 2
+    loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
+    loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
+    loss = (loss1 + loss2).sum(dim=1) / 2
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
+
 def js_gmm_loss_(prob, mean, lstd, target, loss_weight):
     scale = (config.js_project.shape[1] - 1) / 2 / config.js_project[0,-1]
     acc = 1 / scale / 2
