@@ -87,6 +87,6 @@ class Config:
     assign_topk = 9
     kl_weight = 1.0
     gumbel_temperature = 1.0
-    component = np.linspace(-1, 1, 3)[None, :]
+    component = np.linspace(-1, 1, 21)[None, :]
     project = np.linspace(-2, 2, 21)[None, :]
 config = Config()
