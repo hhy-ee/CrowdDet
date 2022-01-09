@@ -90,7 +90,7 @@ class Config:
     loss_box_gamma = 2.0
     kl_weight = 1.0
     gumbel_temperature = 1.0
-    component = np.linspace(-1, 1, 3)[None, :]
+    component = np.linspace(-1, 1, 21)[None, :]
     project = np.linspace(-1, 1, 21)[None, :]
     
 config = Config()
