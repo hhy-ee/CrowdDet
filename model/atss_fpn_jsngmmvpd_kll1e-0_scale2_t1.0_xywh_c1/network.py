@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, giou_loss, js_gmm_loss_
+from det_oprs.loss_opr import focal_loss, giou_loss, js_gmm_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -74,7 +74,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_ctn = torch.cat(pred_ctn_list, axis=1).reshape(-1)
-        all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 2 * config.project.shape[1])
+        all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 3 * config.component.shape[1])
         # get ground truth
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
@@ -82,15 +82,19 @@ class RetinaNet_Criteria(nn.Module):
         anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
         ctn_target = centerness_target(anchor_target, bbox_target[fg_mask])
         # gumbel max
-        n_component = config.project.shape[1]
+        n_component = config.component.shape[1]
         pos_pred_prob = all_pred_dist[..., :n_component][fg_mask].reshape(-1, n_component)
         gumbel_sample = -torch.log(-torch.log(torch.rand_like(pos_pred_prob) + 1e-10) + 1e-10)
         gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / config.gumbel_temperature, dim=1)
         pos_weight = F.softmax(pos_pred_prob, dim=1)
         # variational inference
-        project_mean = torch.tensor(config.project).type_as(all_pred_dist).repeat(gumbel_weight.shape[0], 1)
-        pos_pred_lstd = all_pred_dist[..., n_component:][fg_mask].reshape(-1, n_component)
-        pos_pred_delta = project_mean + pos_pred_lstd.exp() * torch.randn_like(project_mean)
+        pos_proj_mean = torch.tensor(config.component).type_as(all_pred_dist).\
+            repeat(pos_weight.shape[0], 1)
+        pos_gaus_dist = all_pred_dist[..., n_component:][fg_mask]
+        pos_pred_mean_offset = torch.tanh(pos_gaus_dist[..., :n_component]).reshape(-1, n_component)
+        pos_pred_mean = pos_pred_mean_offset * 5 + pos_proj_mean
+        pos_pred_lstd = pos_gaus_dist[..., n_component:].reshape(-1, n_component)
+        pos_pred_delta = pos_pred_mean + pos_pred_lstd.exp() * torch.randn_like(pos_pred_mean)
         pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
         # regression loss
         loss_ctn = F.binary_cross_entropy_with_logits(
@@ -104,9 +108,9 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_jsd = js_gmm_loss_(
+        loss_jsd = js_gmm_loss(
                 pos_weight,
-                project_mean,
+                pos_pred_mean,
                 pos_pred_lstd, 
                 bbox_target[fg_mask],
                 config.kl_weight)
@@ -148,7 +152,7 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * (config.num_classes-1),
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
-            in_channels, config.num_cell_anchors * 4 * 2 * config.project.shape[1],
+            in_channels, config.num_cell_anchors * 4 * 3 * config.component.shape[1],
             kernel_size=3, stride=1, padding=1)
         self.centerness_pred = nn.Conv2d(
             in_channels, config.num_cell_anchors * 1,
@@ -179,7 +183,7 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4 * 2 * config.project.shape[1])
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4 * 3 * config.component.shape[1])
             for _ in pred_reg]
         pred_ctn_list = [
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 1)
@@ -194,10 +198,14 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_lis
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 2 * config.project.shape[1])
-        weight = F.softmax(pred_reg[:, :config.project.shape[1]], dim=1)
-        project = torch.tensor(config.project).type_as(pred_reg).repeat(weight.shape[0], 1)
-        pred_reg = weight.mul(project).sum(dim=1).reshape(-1, 4)
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 3 * config.component.shape[1])
+        pred_wgh = F.softmax(pred_reg[:, :config.component.shape[1]], dim=1)
+        proj_mod = torch.tensor(config.component).type_as(pred_reg).repeat(pred_wgh.shape[0], 1)
+        pred_gaus_dist = pred_reg[:, config.component.shape[1]:]
+        pred_mean_offset = torch.sigmoid(pred_gaus_dist[..., :config.component.shape[1]].\
+            reshape(-1, config.component.shape[1])) * 2 - 1
+        pred_mean = pred_mean_offset * (config.component[0,-1] / (config.component.shape[1] - 1)) + proj_mod
+        pred_reg = pred_wgh.mul(pred_mean).sum(dim=1).reshape(-1, 4)
         pred_ctn = pred_ctn_list[l_id][0].reshape(-1, 1)
         pred_scr = torch.sigmoid(pred_cls) * torch.sigmoid(pred_ctn)
         if len(anchors) > config.test_layer_topk:

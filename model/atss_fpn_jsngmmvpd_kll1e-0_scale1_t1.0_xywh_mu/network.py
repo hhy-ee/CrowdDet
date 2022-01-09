@@ -197,10 +197,14 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_lis
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
-        pred_reg = pred_reg_list[l_id][0].reshape(-1, 2 * config.project.shape[1])
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 3 * config.project.shape[1])
         weight = F.softmax(pred_reg[:, :config.project.shape[1]], dim=1)
         project = torch.tensor(config.project).type_as(pred_reg).repeat(weight.shape[0], 1)
-        pred_reg = weight.mul(project).sum(dim=1).reshape(-1, 4)
+        pred_gaus_dist = pred_reg[:, config.project.shape[1]:]
+        pred_mean_offset = torch.sigmoid(pred_gaus_dist[..., :config.project.shape[1]].\
+            reshape(-1, config.project.shape[1])) * 2 - 1
+        pred_mean = pred_mean_offset * (config.project[0,-1] / (config.project.shape[1] - 1)) + project
+        pred_reg = weight.mul(pred_mean).sum(dim=1).reshape(-1, 4)
         pred_ctn = pred_ctn_list[l_id][0].reshape(-1, 1)
         pred_scr = torch.sigmoid(pred_cls) * torch.sigmoid(pred_ctn)
         if len(anchors) > config.test_layer_topk:
