@@ -187,9 +187,9 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         pred_wgh = F.softmax(pred_reg[:, :config.component.shape[1]], dim=1)
         proj_mod = torch.tensor(config.component).type_as(pred_reg).repeat(pred_wgh.shape[0], 1)
         pred_gaus_dist = pred_reg[:, config.component.shape[1]:]
-        pred_mean_offset = torch.sigmoid(pred_gaus_dist[..., :config.component.shape[1]].\
-            reshape(-1, config.component.shape[1])) * 2 - 1
-        pred_mean = pred_mean_offset * (config.component[0,-1] / (config.component.shape[1] - 1)) + proj_mod
+        pred_mean_offset = torch.tanh(pred_gaus_dist[..., :config.component.shape[1]]).\
+            reshape(-1, config.component.shape[1])
+        pred_mean = pred_mean_offset * 2 + proj_mod
         pred_reg = pred_wgh.mul(pred_mean).sum(dim=1).reshape(-1, 4)
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
