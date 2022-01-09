@@ -92,7 +92,7 @@ class RetinaNet_Criteria(nn.Module):
             repeat(pos_weight.shape[0], 1)
         pos_gaus_dist = all_pred_dist[..., n_component:][fg_mask]
         pos_pred_mean_offset = torch.tanh(pos_gaus_dist[..., :n_component]).reshape(-1, n_component)
-        pos_pred_mean = pos_pred_mean_offset * 2 + pos_proj_mean
+        pos_pred_mean = pos_pred_mean_offset * config.component[0, -1] + pos_proj_mean
         pos_pred_lstd = pos_gaus_dist[..., n_component:].reshape(-1, n_component)
         pos_pred_delta = pos_pred_mean + pos_pred_lstd.exp() * torch.randn_like(pos_pred_mean)
         pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
