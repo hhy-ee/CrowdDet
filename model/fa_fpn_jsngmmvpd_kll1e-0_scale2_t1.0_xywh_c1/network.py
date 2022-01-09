@@ -73,7 +73,7 @@ class RetinaNet_Criteria(nn.Module):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_cls = torch.sigmoid(all_pred_cls)
-        all_pred_dist =  torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 3 * config.project.shape[1])
+        all_pred_dist =  torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 3 * config.component.shape[1])
         # gumbel max
         n_component = config.component.shape[1]
         pred_prob = all_pred_dist[..., :n_component].reshape(-1, n_component)
@@ -137,7 +137,7 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * (config.num_classes-1),
             kernel_size=3, stride=1, padding=1)
         self.bbox_pred = nn.Conv2d(
-            in_channels, config.num_cell_anchors * 4 * 3 * config.project.shape[1],
+            in_channels, config.num_cell_anchors * 4 * 3 * config.component.shape[1],
             kernel_size=3, stride=1, padding=1)
 
         # Initialization
@@ -163,7 +163,7 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
             for _ in pred_cls]
         pred_reg_list = [
-            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4 * 3 * config.project.shape[1])
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 4 * 3 * config.component.shape[1])
             for _ in pred_reg]
         return pred_cls_list, pred_reg_list
 
