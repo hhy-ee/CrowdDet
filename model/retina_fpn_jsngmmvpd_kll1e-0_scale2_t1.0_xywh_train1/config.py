@@ -85,7 +85,7 @@ class Config:
     # ----------freeanchor config---------- #
     kl_weight = 1.0
     gumbel_temperature = 1.0
-    component = np.linspace(-1, 1, 3)[None, :]
+    component = np.linspace(-1, 1, 11)[None, :]
     project = np.linspace(-1, 1, 21)[None, :]
 
 config = Config()

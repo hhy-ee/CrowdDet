@@ -84,11 +84,12 @@ class RetinaNet_Criteria(nn.Module):
         gumbel_weight = F.softmax((gumbel_sample + pos_pred_prob) / config.gumbel_temperature, dim=1)
         pos_weight = F.softmax(pos_pred_prob, dim=1)
         # variational inference
-        pos_proj_mean = torch.tensor(config.component).type_as(all_pred_dist).\
-            repeat(pos_weight.shape[0], 1)
+        scale = config.component[0, -1] - config.component[0, 0]
         pos_gaus_dist = all_pred_dist[..., n_component:][fg_mask]
-        pos_pred_mean_offset = torch.tanh(pos_gaus_dist[..., :n_component]).reshape(-1, n_component)
-        pos_pred_mean = pos_pred_mean_offset * config.component[0, -1] + pos_proj_mean
+        pos_pred_mean = pos_weight.new_full(pos_weight.shape, config.component[0, 0])
+        pos_pred_quan = torch.softmax(pos_gaus_dist[..., :n_component - 1], dim=2)
+        pos_pred_quan = torch.cumsum(pos_pred_quan, dim=2).reshape(-1, n_component-1)
+        pos_pred_mean[:, 1:] =  scale * pos_pred_quan + config.project[0, 0]
         pos_pred_lstd = pos_gaus_dist[..., n_component:].reshape(-1, n_component)
         pos_pred_delta = pos_pred_mean + pos_pred_lstd.exp() * torch.randn_like(pos_pred_mean)
         pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
@@ -185,11 +186,11 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
         pred_reg = pred_reg_list[l_id][0].reshape(-1, 3 * config.component.shape[1])
         pred_wgh = F.softmax(pred_reg[:, :config.component.shape[1]], dim=1)
-        proj_mod = torch.tensor(config.component).type_as(pred_reg).repeat(pred_wgh.shape[0], 1)
-        pred_gaus_dist = pred_reg[:, config.component.shape[1]:]
-        pred_mean_offset = torch.tanh(pred_gaus_dist[..., :config.component.shape[1]]).\
-            reshape(-1, config.component.shape[1])
-        pred_mean = pred_mean_offset * config.component[0, -1] + proj_mod
+        pred_gau = pred_reg[:, config.component.shape[1]:]
+        pred_int =  F.softmax(pred_gau[:, :config.component.shape[1]-1], dim=1)
+        pred_mean = pred_wgh.new_full(pred_wgh.shape, config.component[0, 0])
+        pred_mean[:, 1:] = pred_int * (config.component[0, -1] - config.component[0, 0]) \
+            + config.component[0, 0]
         pred_reg = pred_wgh.mul(pred_mean).sum(dim=1).reshape(-1, 4)
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
