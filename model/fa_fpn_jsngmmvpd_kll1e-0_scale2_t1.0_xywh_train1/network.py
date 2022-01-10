@@ -176,9 +176,11 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
+        pred_reg = pred_reg_list[l_id][0].reshape(-1, 3 * config.component.shape[1])
         pred_wgh = F.softmax(pred_reg[:, :config.component.shape[1]], dim=1)
         pred_gau = pred_reg[:, config.component.shape[1]:]
         pred_int =  F.softmax(pred_gau[:, :config.component.shape[1]-1], dim=1)
+        pred_int = torch.cumsum(pred_int, dim=1)
         pred_mean = pred_wgh.new_full(pred_wgh.shape, config.component[0, 0])
         pred_mean[:, 1:] = pred_int * (config.component[0, -1] - config.component[0, 0]) \
             + config.component[0, 0]
