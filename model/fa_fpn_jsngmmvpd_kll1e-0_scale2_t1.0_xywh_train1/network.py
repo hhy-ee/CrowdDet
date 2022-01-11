@@ -180,6 +180,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         pred_wgh = F.softmax(pred_reg[:, :config.component.shape[1]], dim=1)
         pred_gau = pred_reg[:, config.component.shape[1]:]
         pred_int =  F.softmax(pred_gau[:, :config.component.shape[1]-1], dim=1)
+        pred_int = torch.cumsum(pred_int, dim=1)
         pred_mean = pred_wgh.new_full(pred_wgh.shape, config.component[0, 0])
         pred_mean[:, 1:] = pred_int * (config.component[0, -1] - config.component[0, 0]) \
             + config.component[0, 0]
