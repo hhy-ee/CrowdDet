@@ -59,12 +59,12 @@ def eval_all(args, config, network):
     fpath = os.path.join(evalDir, 'dump-{}.json'.format(args.resume_weights))
     misc_utils.save_json_lines(all_results, fpath)
     # evaluation
-    eval_path = os.path.join(evalDir, 'eval-{}.json'.format(args.resume_weights))
+    eval_path = os.path.join(evalDir, 'eval-test-{}.json'.format(args.resume_weights))
     eval_fid = open(eval_path,'w')
     # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     # for line in res_line:
     #     eval_fid.write(line+'\n')
-    AP, MR, scorelist, pltscrlist = compute_APMR.compute_my_APMR(5, fpath, config.eval_source, 'box', len_dataset)
+    AP, MR, scorelist, pltscrlist = compute_APMR.compute_my_APMR(0, fpath, config.eval_source, 'box', len_dataset)
     if config.save_data and 'set' not in config.test_nms_method:
         save_data(scorelist, len_dataset)
     elif config.save_data and 'set' in config.test_nms_method:
@@ -204,7 +204,7 @@ def run_test():
     # args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh', 
     #                           '--resume_weights', '38'])
-    args = parser.parse_args(['--model_dir', 'rcnn_mip_single_gmvpd_pos2_kll1e-0_prior_p1_xywh', 
+    args = parser.parse_args(['--model_dir', 'atss_fpn_jsgauvpd_kll5e-1_scale2_xywh', 
                               '--resume_weights', '30'])
 
     # import libs
