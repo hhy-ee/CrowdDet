@@ -24,7 +24,7 @@ class_names = ['background', 'person']
 plot_color = ['red', 'orange', 'yellow', 'green', 'blue']
 score_level = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
 
-def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='white'):
+def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='white', putText=False):
     width = img.shape[1]
     height = img.shape[0]
     for i in range(len(boxes)):
@@ -33,7 +33,7 @@ def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='whi
                     min(one_box[2], width - 1), min(one_box[3], height - 1)])
         x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
         cv2.rectangle(img, (x1,y1), (x2,y2), color[line_color], line_thick)
-        if scores is not None:
+        if putText:
             text = "{} {:.3f}".format(tags[i], scores[i])
             cv2.putText(img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color[line_color], line_thick)
     return img

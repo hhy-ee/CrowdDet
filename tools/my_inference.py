@@ -6,6 +6,7 @@ import argparse
 import cv2
 import torch
 import numpy as np
+from tqdm import tqdm
 
 lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
 model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
@@ -27,22 +28,30 @@ def inference(args, config, network):
     check_point = torch.load(model_file, map_location=torch.device('cpu'))
     net.load_state_dict(check_point['state_dict'])
     # get data
-    image, resized_img, im_info = get_data(
-            args.img_path, config.eval_image_short_size, config.eval_image_max_size) 
-    pred_boxes = net(resized_img, im_info).numpy()
-    pred_boxes = post_process(pred_boxes, config, im_info[0, 2])
-    pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
-    pred_tags_name = np.array(config.class_names)[pred_tags]
-    # inplace draw
-    image = visual_utils.draw_boxes(
-            image,
-            pred_boxes[:, :4],
-            scores=pred_boxes[:, 4],
-            tags=pred_tags_name,
-            line_thick=1, line_color='white')
-    name = args.img_path.split('/')[-1].split('.')[-2]
-    fpath = 'outputs/{}.png'.format(name)
-    cv2.imwrite(fpath, image)
+    records = misc_utils.load_json_lines(config.eval_source)
+    start = np.int(args.img_num.split('-')[0])
+    end = np.int(args.img_num.split('-')[1])
+    pbar = tqdm(total=end-start, ncols=50)
+    for i in range(start, end):
+        img_path = args.img_path + records[i]['ID'] + '.jpg'
+        image, resized_img, im_info = get_data(
+                img_path, config.eval_image_short_size, config.eval_image_max_size) 
+        pred_boxes = net(resized_img, im_info).numpy()
+        pred_boxes = post_process(pred_boxes, config, im_info[0, 2])
+        pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
+        pred_tags_name = np.array(config.class_names)[pred_tags]
+        # inplace draw
+        image = visual_utils.draw_boxes(
+                image,
+                pred_boxes[:, :4],
+                scores=pred_boxes[:, 4],
+                tags=pred_tags_name,
+                line_thick=3, line_color='red')
+        name = img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
+        pbar.update(1)
+    pbar.close()
 
 def post_process(pred_boxes, config, scale):
     if config.test_nms_method == 'set_nms':
@@ -110,10 +119,12 @@ def run_inference():
     parser.add_argument('--model_dir', '-md', default=None, required=True, type=str)
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
+    parser.add_argument('--img_num', '-n', default=None, required=True, type=str)
     # args = parser.parse_args()
     args = parser.parse_args(['--model_dir', 'atss_fpn_jsgauvpd_kll1e-0_scale2_xywh',
                                 '--resume_weights', '30',
-                                '--img_path', './data/CrowdHuman/Images/273275,a881800003a22d5c.jpg'])
+                                '--img_path', './data/CrowdHuman/Images/',
+                                '--img_num', '0-100'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
