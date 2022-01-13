@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.bbox_opr import box_overlap_opr, align_box_giou_opr
+from det_oprs.bbox_opr import box_overlap_opr, align_box_giou_opr, align_box_overlap_opr
 from config import config
 from utils import cal_utils
 
@@ -30,6 +30,13 @@ def smooth_l1_loss(pred, target, beta: float):
         in_mask = abs_x < beta
         loss = torch.where(in_mask, 0.5 * abs_x ** 2 / beta, abs_x - 0.5 * beta)
     return loss.sum(axis=-1)
+
+def iou_loss(pred, target, anchor):
+    pred_boxes = bbox_transform_inv_opr(anchor, pred)
+    target_boxes = bbox_transform_inv_opr(anchor, target)
+    ious = align_box_overlap_opr(pred_boxes, target_boxes)
+    loss = 1 - ious
+    return loss
 
 def giou_loss(pred, target, anchor):
     pred_boxes = bbox_transform_inv_opr(anchor, pred)
