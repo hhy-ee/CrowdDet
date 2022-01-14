@@ -155,10 +155,10 @@ def run_inference():
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
     parser.add_argument('--img_num', '-n', default=None, required=True, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll4e-0_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-1_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
-                                '--img_num', '2-50'])
+                                '--img_num', '51-100'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)

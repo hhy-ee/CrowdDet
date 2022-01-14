@@ -81,6 +81,7 @@ class Config:
     positive_thresh = 0.5
     allow_low_quality = True
     save_data = False
+    inference = 'draw_boxes_before_nms'
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6

@@ -82,6 +82,7 @@ class Config:
     allow_low_quality = True
     save_data = False
     add_test_noise = False
+    inference = 'draw_boxes_before_nms'
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6
