@@ -37,19 +37,44 @@ def inference(args, config, network):
         image, resized_img, im_info = get_data(
                 img_path, config.eval_image_short_size, config.eval_image_max_size) 
         pred_boxes = net(resized_img, im_info).numpy()
-        pred_boxes = post_process(pred_boxes, config, im_info[0, 2])
+        pred_boxes, supp_boxes, pre_boxes_before_nms = post_process(pred_boxes, config, im_info[0, 2])
+        inf_result, gt_boxes, gt_matched = visual_utils.my_inference_result(
+                config.eval_source, img_path, pred_boxes, im_info)
         pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
         pred_tags_name = np.array(config.class_names)[pred_tags]
         # inplace draw
-        image = visual_utils.draw_boxes(
-                image,
-                pred_boxes[:, :4],
-                scores=pred_boxes[:, 4],
-                tags=pred_tags_name,
-                line_thick=3, line_color='red')
-        name = img_path.split('/')[-1].split('.')[-2]
-        fpath = 'outputs/{}.png'.format(name)
-        cv2.imwrite(fpath, image)
+        if config.inference == 'draw_boxes':
+            image = visual_utils.draw_boxes(
+                    image,
+                    pred_boxes[:, :4],
+                    scores=pred_boxes[:, 4],
+                    tags=pred_tags_name,
+                    line_thick=1, line_color='red')
+            name = img_path.split('/')[-1].split('.')[-2]
+            fpath = 'outputs/{}.png'.format(name)
+            cv2.imwrite(fpath, image)
+        if config.inference == 'draw_boxes_before_nms':
+            image = visual_utils.draw_boxes(
+                    image,
+                    pre_boxes_before_nms[:, :4],
+                    scores=pred_boxes[:, 4],
+                    tags=pred_tags_name,
+                    line_thick=1, line_color='green')
+            name = img_path.split('/')[-1].split('.')[-2]
+            fpath = 'outputs/{}.png'.format(name)
+            cv2.imwrite(fpath, image)
+        if config.inference == 'draw_boxes_heavy':
+            gt_boxes = visual_utils.cal_vis_part(gt_boxes, records[i]['gtboxes'])
+            image = visual_utils.draw_heavy_boxes(
+                    image,
+                    pred_boxes[:, :4],
+                    (supp_boxes, inf_result, gt_boxes, gt_matched),
+                    scores=pred_boxes[:, 4],
+                    tags=pred_tags_name,
+                    line_thick=1, line_color='red')
+            name = img_path.split('/')[-1].split('.')[-2]
+            fpath = 'outputs/{}.png'.format(name)
+            cv2.imwrite(fpath, image)
         pbar.update(1)
     pbar.close()
 
@@ -71,7 +96,8 @@ def post_process(pred_boxes, config, scale):
         pred_boxes = pred_boxes.reshape(-1, 6)
         keep = pred_boxes[:, 4] > config.pred_cls_threshold
         pred_boxes = pred_boxes[keep]
-        keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
+        keep, supp = nms_utils.nms_for_plot(pred_boxes, config.test_nms)
+        pre_boxes_before_nms = pred_boxes
         pred_boxes = pred_boxes[keep]
     elif config.test_nms_method == 'none':
         assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
@@ -87,7 +113,15 @@ def post_process(pred_boxes, config, scale):
     pred_boxes[:, :4] /= scale
     keep = pred_boxes[:, 4] > config.visulize_threshold
     pred_boxes = pred_boxes[keep]
-    return pred_boxes
+
+    pre_boxes_before_nms[:, :4] /= scale
+    boxes_supp = supp[:keep.sum()]
+    supp_boxes = [pre_boxes_before_nms[box_supp] for box_supp in boxes_supp]
+
+    keep = pre_boxes_before_nms[:, 4] > config.visulize_threshold
+    pre_boxes_before_nms = pre_boxes_before_nms[keep]
+
+    return pred_boxes, supp_boxes, pre_boxes_before_nms
 
 def get_data(img_path, short_size, max_size):
     image = cv2.imread(img_path, cv2.IMREAD_COLOR)
@@ -121,10 +155,10 @@ def run_inference():
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
     parser.add_argument('--img_num', '-n', default=None, required=True, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'atss_fpn_jsgauvpd_kll1e-0_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll4e-0_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
-                                '--img_num', '0-100'])
+                                '--img_num', '2-50'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)

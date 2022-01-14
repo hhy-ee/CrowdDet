@@ -38,6 +38,27 @@ def draw_boxes(img, boxes, scores=None, tags=None, line_thick=1, line_color='whi
             cv2.putText(img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color[line_color], line_thick)
     return img
 
+def draw_heavy_boxes(img, boxes, boxes_info, scores=None, tags=None, line_thick=1, line_color='white', putText=False):
+    width = img.shape[1]
+    height = img.shape[0]
+    (supp_boxes, inf_result, gt_boxes, gt_matched) = boxes_info
+    for i in range(len(boxes)):
+        box_info = inf_result[i]
+        if gt_boxes[box_info[2], -1] > 0.7 and gt_boxes[box_info[2], -1] < 1:
+            one_box = boxes[i]
+            one_gt = gt_boxes[box_info[2], :4]
+            one_box = np.array([max(one_box[0], 0), max(one_box[1], 0),
+                        min(one_box[2], width - 1), min(one_box[3], height - 1)])
+            one_gt = np.array([max(one_gt[0], 0), max(one_gt[1], 0),
+                        min(one_gt[2], width - 1), min(one_gt[3], height - 1)])
+            x1,y1,x2,y2 = np.array(one_box[:4]).astype(int)
+            gx1,gy1,gx2,gy2 = np.array(one_gt[:4]).astype(int)
+            cv2.rectangle(img, (x1,y1), (x2,y2), color['green'], line_thick)
+            cv2.rectangle(img, (gx1,gy1), (gx2,gy2), color[line_color], 3)
+            if putText:
+                text = "{} {:.3f}".format(tags[i], scores[i])
+                cv2.putText(img, text, (x1, y1 - 7), cv2.FONT_ITALIC, 0.5, color[line_color], line_thick)
+    return img
 
 def draw_mip_for_set_kl(img, boxes, boxes_info, args, line_thick=1, line_color=('green','blue','red')):
     width = img.shape[1]
@@ -275,6 +296,19 @@ def beta_dist(kernel, beta_para, va_beta):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+def my_inference_result(gt_path, img_path, pred_boxes, im_info):
+    with open(gt_path, "r") as f:
+        lines = f.readlines()
+        records = [json.loads(line.strip('\n')) for line in lines]
+    for record in records:
+        if record["ID"] == img_path.split('/')[-1].split('.')[0]:
+            h, w=int(im_info[0, -3]), int(im_info[0, -2])
+            gt_bboxes = load_gt_boxes(record, 'gtboxes')
+            pred_boxes, gt_bboxes = clip_all_boader(pred_boxes, gt_bboxes, h, w)
+            score_list, gt_list, gt_matched = compare_caltech(pred_boxes, gt_bboxes, 0.5)
+            score_list.sort(key=lambda x: x[0][4], reverse=True)
+    return score_list, gt_list, gt_matched
+
 def inference_result(gt_path, img_path, pred_boxes, im_info):
     pred_boxes_lstd = np.mean(pred_boxes[:,6:8], axis=1, keepdims=True)
     pred_boxes = np.concatenate([pred_boxes[:,:6], pred_boxes_lstd, pred_boxes[:,8:]], axis=1)
@@ -431,3 +465,17 @@ def clip_all_boader(dtboxes, gtboxes, _height, _width):
     dtboxes = _clip_boundary(dtboxes, _height, _width)
     gtboxes = _clip_boundary(gtboxes, _height, _width)
     return dtboxes, gtboxes
+
+def cal_vis_part(gtboxes, records):
+    occ = np.zeros([gtboxes.shape[0], 1])
+    for i in range(len(gtboxes)):
+        if gtboxes[i, -1] == 1:
+            fbox = np.array([records[i]['fbox']])
+            vbox = np.array([records[i]['vbox']])
+            fbox[:, 2:4] += fbox[:, :2]
+            vbox[:, 2:4] += vbox[:, :2]
+            occlusion = 1 - box_overlap_opr(fbox, vbox, True)
+        else:
+            occlusion = 100
+        occ[i, 0] = occlusion
+    return np.concatenate([gtboxes, occ], axis=1) 

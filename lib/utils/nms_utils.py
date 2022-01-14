@@ -271,7 +271,6 @@ def nms_for_plot(dets, base_thr):
     x2 = dets[:, 2]
     y2 = dets[:, 3]
     scores = dets[:, 4]
-    lstd = dets[:, 6:].mean(1)
 
     areas = (x2 - x1) * (y2 - y1)
     order = np.argsort(-scores)
@@ -296,7 +295,7 @@ def nms_for_plot(dets, base_thr):
         indices = np.where((ovr <= base_thr) * (ovr > base_thr-0.1))[0]
         supp.append(order[indices + 1])
         order = order[inds + 1]
-    return np.array(keep), supp, 
+    return np.array(keep), supp
 
 def _test():
     box1 = np.array([33,45,145,230,0.7])[None,:]
