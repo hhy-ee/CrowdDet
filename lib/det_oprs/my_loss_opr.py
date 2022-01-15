@@ -246,7 +246,7 @@ def freeanchor_loss_giou(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
         # matched_box_prob: P_{ij}^{loc}
         pred_boxes = bbox_transform_inv_opr(anchors, bbox_preds_)
         object_box_iou, _ = box_giou_opr(gt_bboxes_, pred_boxes)
-        object_box_iou = (object_box_iou + 1) / 2
+        object_box_iou = torch.exp(object_box_iou - 1)
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
         num_pos = num_pos + len(gt_bboxes_)
         positive_losses.append(positive_bag_loss(matched_cls_prob, matched_box_prob))
@@ -512,7 +512,7 @@ def freeanchor_vpd_loss_giou(anchors, cls_prob, bbox_preds, bbox_vpd_preds, gt_b
         # matched_box_prob: P_{ij}^{loc}
         pred_boxes = bbox_transform_inv_opr(anchors, bbox_vpd_preds_)
         object_box_iou, _ = box_giou_opr(gt_bboxes_, pred_boxes)
-        object_box_iou = (object_box_iou + 1) / 2
+        object_box_iou = torch.exp(object_box_iou - 1)
         matched_box_prob = torch.gather(object_box_iou, 1, matched).clamp(min=1e-6)
         num_pos = num_pos + len(gt_bboxes_)
         positive_losses.append(positive_bag_loss(matched_cls_prob, matched_box_prob))
