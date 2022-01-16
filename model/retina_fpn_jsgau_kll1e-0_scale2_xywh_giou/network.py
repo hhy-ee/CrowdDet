@@ -82,7 +82,7 @@ class RetinaNet_Criteria(nn.Module):
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
         anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
-        loss_reg = giou_loss( 
+        loss_reg = giou_loss(
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],
                 anchor_target)
