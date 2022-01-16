@@ -460,7 +460,6 @@ def clip_all_boader(dtboxes, gtboxes, _height, _width):
         boxes[:,3] = np.maximum(np.minimum(boxes[:,3],height), 0)
         return boxes
 
-    assert dtboxes.shape[-1]>=4
     assert gtboxes.shape[-1]>=4
     dtboxes = _clip_boundary(dtboxes, _height, _width)
     gtboxes = _clip_boundary(gtboxes, _height, _width)
