@@ -80,9 +80,9 @@ class Config:
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
-    save_data = False
+    save_data = True
     add_test_noise = False
-    inference = 'draw_boxes_before_nms'
+    inference = 'scatter_scr_std'
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6

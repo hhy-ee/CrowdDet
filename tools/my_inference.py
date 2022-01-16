@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import sys
 import argparse
 
@@ -7,6 +7,7 @@ import cv2
 import torch
 import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
 model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
@@ -75,6 +76,16 @@ def inference(args, config, network):
             name = img_path.split('/')[-1].split('.')[-2]
             fpath = 'outputs/{}.png'.format(name)
             cv2.imwrite(fpath, image)
+        if config.inference == 'scatter_scr_std':
+            pred_score = pre_boxes_before_nms[:, 4:5]
+            pred_lstd = pre_boxes_before_nms[:, 6:10]
+            gt_boxes = gt_boxes[np.where(gt_boxes[:,-1]==1)[0],:4]
+            iou = visual_utils.box_overlap_opr(pre_boxes_before_nms[:, :4], gt_boxes, True)
+            pred_iou = np.max(iou, axis=1, keepdims=True)
+            f = open("./vis_data.txt",'a')
+            data = np.concatenate([pred_score, pred_lstd, pred_iou], axis=1)
+            np.savetxt(f, data)
+            f.close()
         pbar.update(1)
     pbar.close()
 
@@ -92,8 +103,6 @@ def post_process(pred_boxes, config, scale):
         keep = nms_utils.set_cpu_nms(pred_boxes, 0.5)
         pred_boxes = pred_boxes[keep]
     elif config.test_nms_method == 'normal_nms':
-        assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
-        pred_boxes = pred_boxes.reshape(-1, 6)
         keep = pred_boxes[:, 4] > config.pred_cls_threshold
         pred_boxes = pred_boxes[keep]
         keep, supp = nms_utils.nms_for_plot(pred_boxes, config.test_nms)
@@ -155,10 +164,10 @@ def run_inference():
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
     parser.add_argument('--img_num', '-n', default=None, required=True, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-1_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgau_kll1e-0_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
-                                '--img_num', '51-100'])
+                                '--img_num', '0-20'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
