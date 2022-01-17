@@ -70,7 +70,7 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
                 pred_boxes[:, :4],
                 scores=pred_boxes[:, 4],
                 tags=pred_tags_name,
-                line_thick=1, line_color='red')
+                line_thick=2, line_color='red')
         name = img_path.split('/')[-1].split('.')[-2]
         fpath = 'outputs/{}.png'.format(name)
         cv2.imwrite(fpath, image)
@@ -121,10 +121,11 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
         for j in range(len(pred_scr_list)):
             scr = pred_scr_list[j][0, :, :, 0].numpy()
             scr = cv2.resize(scr, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
-            lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
-            lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
             scrs += scr
-            lstds += lstd
+            if j==0:
+                lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
+                lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+                lstds += lstd
         lstd_map, scr_map = None, None
         scr_map = cv2.normalize(scrs, scr_map, alpha=0, beta=255, \
             norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
@@ -140,6 +141,20 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
         cv2.imwrite(fpath, scr_map)
         fpath = 'outputs/{}_lstdmap.png'.format(name)
         cv2.imwrite(fpath, lstd_map)
+    if args.vis_mode == 'each_fpn_heatmap':
+        pred_scr_list, pred_dist_list = net.inference(resized_img, im_info)
+        for j in range(len(pred_scr_list)):
+            lstds = np.zeros((image.shape[0], image.shape[1]))
+            lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
+            lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+            lstd_map = cv2.normalize(lstd, None, alpha=0, beta=255, \
+                norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            lstd_map = cv2.applyColorMap(lstd_map, cv2.COLORMAP_JET)
+            lstd_map = cv2.cvtColor(lstd_map, cv2.COLOR_BGR2RGB)
+            name = img_path.split('/')[-1].split('.')[-2]
+            fpath = 'outputs/{}.png'.format(name)
+            fpath = 'outputs/{}_lstdmap{}.png'.format(name, j)
+            cv2.imwrite(fpath, lstd_map)
 
 def post_process(pred_boxes, config, scale):
     if config.test_nms_method == 'set_nms':
@@ -218,12 +233,12 @@ def run_inference():
     parser.add_argument('--img_name', '-na', default=None, required=False, type=str)
     parser.add_argument('--vis_mode', '-vi', default=None, required=False, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-1_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgau_kll1e-0_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
                                 '--img_num', '200-400',
-                                '--img_name', '273275,720840003a49cf5b',
-                                '--vis_mode', 'fpn_heatmap'])
+                                '--img_name', '273271,c9db000d5146c15',
+                                '--vis_mode', 'each_fpn_heatmap'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
