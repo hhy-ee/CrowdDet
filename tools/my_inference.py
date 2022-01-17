@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import sys
 import argparse
 
@@ -30,64 +30,116 @@ def inference(args, config, network):
     net.load_state_dict(check_point['state_dict'])
     # get data
     records = misc_utils.load_json_lines(config.eval_source)
-    start = np.int(args.img_num.split('-')[0])
-    end = np.int(args.img_num.split('-')[1])
-    pbar = tqdm(total=end-start, ncols=50)
-    for i in range(start, end):
-        img_path = args.img_path + records[i]['ID'] + '.jpg'
+    if args.img_name == 'None':
+        start = np.int(args.img_num.split('-')[0])
+        end = np.int(args.img_num.split('-')[1])
+        pbar = tqdm(total=end-start, ncols=50)
+        for i in range(start, end):
+            img_path = args.img_path + records[i]['ID'] + '.jpg'
+            image, resized_img, im_info = get_data(
+                    img_path, config.eval_image_short_size, config.eval_image_max_size) 
+            pred_boxes = net(resized_img, im_info).numpy()
+            pred_boxes, supp_boxes, pred_boxes_before_nms = post_process(pred_boxes, config, im_info[0, 2])
+            inf_result, gt_boxes, gt_matched = visual_utils.my_inference_result(
+                    config.eval_source, img_path, pred_boxes, im_info)
+            pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
+            pred_tags_name = np.array(config.class_names)[pred_tags]
+            visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, 
+            gt_boxes, gt_matched, pred_tags_name, im_info, records, img_path, net, args)
+            pbar.update(1)
+        pbar.close()
+    else:
+        img_path = args.img_path + args.img_name + '.jpg'
         image, resized_img, im_info = get_data(
                 img_path, config.eval_image_short_size, config.eval_image_max_size) 
         pred_boxes = net(resized_img, im_info).numpy()
-        pred_boxes, supp_boxes, pre_boxes_before_nms = post_process(pred_boxes, config, im_info[0, 2])
+        pred_boxes, supp_boxes, pred_boxes_before_nms = post_process(pred_boxes, config, im_info[0, 2])
         inf_result, gt_boxes, gt_matched = visual_utils.my_inference_result(
                 config.eval_source, img_path, pred_boxes, im_info)
         pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
         pred_tags_name = np.array(config.class_names)[pred_tags]
-        # inplace draw
-        if config.inference == 'draw_boxes':
-            image = visual_utils.draw_boxes(
-                    image,
-                    pred_boxes[:, :4],
-                    scores=pred_boxes[:, 4],
-                    tags=pred_tags_name,
-                    line_thick=1, line_color='red')
-            name = img_path.split('/')[-1].split('.')[-2]
-            fpath = 'outputs/{}.png'.format(name)
-            cv2.imwrite(fpath, image)
-        if config.inference == 'draw_boxes_before_nms':
-            image = visual_utils.draw_boxes(
-                    image,
-                    pre_boxes_before_nms[:, :4],
-                    scores=pred_boxes[:, 4],
-                    tags=pred_tags_name,
-                    line_thick=1, line_color='green')
-            name = img_path.split('/')[-1].split('.')[-2]
-            fpath = 'outputs/{}.png'.format(name)
-            cv2.imwrite(fpath, image)
-        if config.inference == 'draw_boxes_heavy':
-            gt_boxes = visual_utils.cal_vis_part(gt_boxes, records[i]['gtboxes'])
-            image = visual_utils.draw_heavy_boxes(
-                    image,
-                    pred_boxes[:, :4],
-                    (supp_boxes, inf_result, gt_boxes, gt_matched),
-                    scores=pred_boxes[:, 4],
-                    tags=pred_tags_name,
-                    line_thick=1, line_color='red')
-            name = img_path.split('/')[-1].split('.')[-2]
-            fpath = 'outputs/{}.png'.format(name)
-            cv2.imwrite(fpath, image)
-        if config.inference == 'scatter_scr_std':
-            pred_score = pre_boxes_before_nms[:, 4:5]
-            pred_lstd = pre_boxes_before_nms[:, 6:10]
-            gt_boxes = gt_boxes[np.where(gt_boxes[:,-1]==1)[0],:4]
-            iou = visual_utils.box_overlap_opr(pre_boxes_before_nms[:, :4], gt_boxes, True)
-            pred_iou = np.max(iou, axis=1, keepdims=True)
-            f = open("./vis_data.txt",'a')
-            data = np.concatenate([pred_score, pred_lstd, pred_iou], axis=1)
-            np.savetxt(f, data)
-            f.close()
-        pbar.update(1)
-    pbar.close()
+        visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, 
+            gt_boxes, gt_matched, pred_tags_name, im_info, records, img_path, net, args)
+
+def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, gt_boxes, 
+                    gt_matched, pred_tags_name, im_info, records, img_path, net, args):
+    # inplace draw
+    if args.vis_mode == 'draw_boxes':
+        image = visual_utils.draw_boxes(
+                image,
+                pred_boxes[:, :4],
+                scores=pred_boxes[:, 4],
+                tags=pred_tags_name,
+                line_thick=1, line_color='red')
+        name = img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
+    if args.vis_mode == 'draw_boxes_before_nms':
+        image = visual_utils.draw_boxes(
+                image,
+                pred_boxes_before_nms[:, :4],
+                scores=pred_boxes[:, 4],
+                tags=pred_tags_name,
+                line_thick=3, line_color='green')
+        name = img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
+    if args.vis_mode == 'draw_boxes_heavy':
+        gt_boxes = visual_utils.cal_vis_part(gt_boxes, records[i]['gtboxes'])
+        image = visual_utils.draw_heavy_boxes(
+                image,
+                pred_boxes[:, :4],
+                (supp_boxes, inf_result, gt_boxes, gt_matched),
+                scores=pred_boxes[:, 4],
+                tags=pred_tags_name,
+                line_thick=1, line_color='red')
+        name = img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
+    if args.vis_mode == 'scatter_scr_std_before_nms':
+        pred_score = pred_boxes_before_nms[:, 4:5]
+        pred_lstd = pred_boxes_before_nms[:, 6:10]
+        gt_boxes = gt_boxes[np.where(gt_boxes[:,-1]==1)[0],:4]
+        iou = visual_utils.box_overlap_opr(pred_boxes_before_nms[:, :4], gt_boxes, True)
+        pred_iou = np.max(iou, axis=1, keepdims=True)
+        f = open("./vis_data.txt",'a')
+        data = np.concatenate([pred_score, pred_lstd, pred_iou], axis=1)
+        np.savetxt(f, data)
+        f.close()
+    if args.vis_mode == 'scatter_scr_std_after_nms':
+        pred_score = np.array([r[0][4] for r in inf_result]).reshape(-1,1)
+        pred_lstd = np.array([r[0][6:10] for r in inf_result])
+        pred_iou = np.array([r[3] for r in inf_result]).reshape(-1,1)
+        f = open("./vis_data.txt",'a')
+        data = np.concatenate([pred_score, pred_lstd, pred_iou], axis=1)
+        np.savetxt(f, data)
+        f.close()
+    if args.vis_mode == 'fpn_heatmap':
+        pred_scr_list, pred_dist_list = net.inference(resized_img, im_info)
+        scrs = np.zeros((image.shape[0], image.shape[1]))
+        lstds = np.zeros((image.shape[0], image.shape[1]))
+        for j in range(len(pred_scr_list)):
+            scr = pred_scr_list[j][0, :, :, 0].numpy()
+            scr = cv2.resize(scr, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+            lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
+            lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+            scrs += scr
+            lstds += lstd
+        lstd_map, scr_map = None, None
+        scr_map = cv2.normalize(scrs, scr_map, alpha=0, beta=255, \
+            norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        lstd_map = cv2.normalize(lstds, lstd_map, alpha=0, beta=255, \
+            norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        scr_map = cv2.applyColorMap(scr_map, cv2.COLORMAP_JET)
+        lstd_map = cv2.applyColorMap(lstd_map, cv2.COLORMAP_JET)
+        lstd_map = cv2.cvtColor(lstd_map, cv2.COLOR_BGR2RGB)
+        name = img_path.split('/')[-1].split('.')[-2]
+        fpath = 'outputs/{}.png'.format(name)
+        cv2.imwrite(fpath, image)
+        fpath = 'outputs/{}_scoremap.png'.format(name)
+        cv2.imwrite(fpath, scr_map)
+        fpath = 'outputs/{}_lstdmap.png'.format(name)
+        cv2.imwrite(fpath, lstd_map)
 
 def post_process(pred_boxes, config, scale):
     if config.test_nms_method == 'set_nms':
@@ -162,12 +214,16 @@ def run_inference():
     parser.add_argument('--model_dir', '-md', default=None, required=True, type=str)
     parser.add_argument('--resume_weights', '-r', default=None, required=True, type=str)
     parser.add_argument('--img_path', '-i', default=None, required=True, type=str)
-    parser.add_argument('--img_num', '-n', default=None, required=True, type=str)
+    parser.add_argument('--img_num', '-nu', default=None, required=False, type=str)
+    parser.add_argument('--img_name', '-na', default=None, required=False, type=str)
+    parser.add_argument('--vis_mode', '-vi', default=None, required=False, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgau_kll1e-0_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-1_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
-                                '--img_num', '0-20'])
+                                '--img_num', '200-400',
+                                '--img_name', '273275,720840003a49cf5b',
+                                '--vis_mode', 'fpn_heatmap'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)

@@ -82,7 +82,6 @@ class Config:
     allow_low_quality = True
     save_data = True
     add_test_noise = False
-    inference = 'scatter_scr_std'
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6
