@@ -44,6 +44,26 @@ class Network(nn.Module):
                     anchors_list, pred_cls_list, pred_reg_list, im_info)
             return pred_bbox.cpu().detach()
 
+    def inference(self, image, im_info, epoch=None, gt_boxes=None):
+        # pre-processing the data
+        image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
+                torch.tensor(config.image_std[None, :, None, None]).type_as(image))
+        image = get_padded_tensor(image, 64)
+        # do inference
+        # stride: 128,64,32,16,8, p7->p3
+        fpn_fms = self.FPN(image)
+        pred_cls_list, pred_reg_list = self.R_Head(fpn_fms)
+        num_levels = [fm.shape for fm in fpn_fms]
+        pred_scr_list = []
+        pred_dist_list = []
+        for i in range(len(num_levels)):
+            w,h = num_levels[i][2:4]
+            pred_scr = pred_cls_list[i].reshape(1, w, h, 1).sigmoid()
+            pred_dist = pred_reg_list[i].reshape(1, w, h, 8)
+            pred_scr_list.append(pred_scr.cpu().detach())
+            pred_dist_list.append(pred_dist.cpu().detach())
+        return pred_scr_list, pred_dist_list
+
 class RetinaNet_Anchor():
     def __init__(self):
         self.anchors_generator = AnchorGenerator(
