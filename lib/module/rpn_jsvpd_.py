@@ -5,7 +5,7 @@ import numpy as np
 
 from config import config
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals
+from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals, find_top_rpn_vpd_proposals
 from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_vpd_reshape
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, js_gaussian_loss
 
@@ -51,9 +51,9 @@ class RPN(nn.Module):
             pred_bbox_offsets_list.append(pred_mean)
             pred_bbox_vpd_offsets_list.append(pred_offset)
         # sample from the predictions
-        rpn_rois = find_top_rpn_proposals(
-                self.training, pred_bbox_offsets_list, pred_cls_score_list,
-                all_anchors_list, im_info)
+        rpn_rois = find_top_rpn_vpd_proposals(
+                self.training, pred_bbox_offsets_list, pred_bbox_vpd_offsets_list, 
+                pred_cls_score_list, all_anchors_list, im_info)
         rpn_rois = rpn_rois.type_as(features[0])
         if self.training:
             rpn_labels, rpn_bbox_targets = fpn_anchor_target(
