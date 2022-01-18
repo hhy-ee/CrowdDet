@@ -292,7 +292,8 @@ def nms_for_plot(dets, base_thr):
         ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
 
         inds = np.where(ovr <= base_thr)[0]
-        indices = np.where((ovr <= base_thr) * (ovr > base_thr-0.1))[0]
+        # indices = np.where((ovr <= base_thr) * (ovr > base_thr-0.1))[0]
+        indices = np.where( ovr > base_thr)[0]
         supp.append(order[indices + 1])
         order = order[inds + 1]
     return np.array(keep), supp
