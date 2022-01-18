@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import sys
 import argparse
 
@@ -45,7 +45,7 @@ def inference(args, config, network):
             pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
             pred_tags_name = np.array(config.class_names)[pred_tags]
             visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, 
-            gt_boxes, gt_matched, pred_tags_name, im_info, records, img_path, net, args)
+            gt_boxes, gt_matched, pred_tags_name, im_info, records, img_path, net, args, config, i)
             pbar.update(1)
         pbar.close()
     else:
@@ -59,10 +59,10 @@ def inference(args, config, network):
         pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
         pred_tags_name = np.array(config.class_names)[pred_tags]
         visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, 
-            gt_boxes, gt_matched, pred_tags_name, im_info, records, img_path, net, args)
+            gt_boxes, gt_matched, pred_tags_name, im_info, records, img_path, net, args, config)
 
 def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, gt_boxes, 
-                    gt_matched, pred_tags_name, im_info, records, img_path, net, args):
+                    gt_matched, pred_tags_name, im_info, records, img_path, net, args, config, img=0):
     # inplace draw
     if args.vis_mode == 'draw_boxes':
         image = visual_utils.draw_boxes(
@@ -85,7 +85,7 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
         fpath = 'outputs/{}.png'.format(name)
         cv2.imwrite(fpath, image)
     if args.vis_mode == 'draw_boxes_heavy':
-        gt_boxes = visual_utils.cal_vis_part(gt_boxes, records[i]['gtboxes'])
+        gt_boxes = visual_utils.cal_vis_part(gt_boxes, records[img]['gtboxes'])
         image = visual_utils.draw_heavy_boxes(
                 image,
                 pred_boxes[:, :4],
@@ -97,13 +97,25 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
         fpath = 'outputs/{}.png'.format(name)
         cv2.imwrite(fpath, image)
     if args.vis_mode == 'scatter_scr_std_before_nms':
-        pred_score = pred_boxes_before_nms[:, 4:5]
-        pred_lstd = pred_boxes_before_nms[:, 6:10]
-        gt_boxes = gt_boxes[np.where(gt_boxes[:,-1]==1)[0],:4]
-        iou = visual_utils.box_overlap_opr(pred_boxes_before_nms[:, :4], gt_boxes, True)
-        pred_iou = np.max(iou, axis=1, keepdims=True)
+        scores = np.array([])
+        ious = np.array([])
+        lstds = np.array([])
+        for i in range(len(inf_result)):
+            pred_scores = np.concatenate([pred_boxes[i:i+1, 4], supp_boxes[i][:, 4]])
+            keep = pred_scores > config.visulize_threshold
+            pred_scores = pred_scores[keep]
+            pred_lstds = np.concatenate([pred_boxes[i:i+1, 6:10], supp_boxes[i][:, 6:10]])
+            pred_lstds = pred_lstds[keep].mean(axis=1)
+            pred_bboxes = np.concatenate([pred_boxes[i:i+1, :4], supp_boxes[i][:, :4]])
+            pred_bboxes = pred_bboxes[keep]
+            gt_box = gt_boxes[inf_result[i][2], :4].reshape(1,-1)
+            pred_iou = visual_utils.box_overlap_opr(pred_bboxes, gt_box, True).reshape(-1)
+            scores = np.concatenate([scores, pred_scores])
+            ious = np.concatenate([ious, pred_iou])
+            lstds = np.concatenate([lstds, pred_lstds])
         f = open("./vis_data.txt",'a')
-        data = np.concatenate([pred_score, pred_lstd, pred_iou], axis=1)
+        data = np.concatenate([scores.reshape(-1,1), lstds.reshape(-1,1), \
+            ious.reshape(-1,1)], axis=1)
         np.savetxt(f, data)
         f.close()
     if args.vis_mode == 'scatter_scr_std_after_nms':
@@ -122,7 +134,7 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
             scr = pred_scr_list[j][0, :, :, 0].numpy()
             scr = cv2.resize(scr, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
             scrs += scr
-            if j==0:
+            if j ==3 or j ==4:
                 lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
                 lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
                 lstds += lstd
@@ -236,9 +248,9 @@ def run_inference():
     args = parser.parse_args(['--model_dir', 'fa_fpn_jsgau_kll1e-0_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
-                                '--img_num', '200-400',
-                                '--img_name', '273271,c9db000d5146c15',
-                                '--vis_mode', 'each_fpn_heatmap'])
+                                '--img_num', '0-400',
+                                '--img_name', None,
+                                '--vis_mode', 'scatter_scr_std_after_nms'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
