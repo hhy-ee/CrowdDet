@@ -74,6 +74,36 @@ def kdl_xywh_loss(pred, target, loss_weight):
         weight_right * torch.log((weight_right + EPS) / (pred_weight_right + EPS))
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
+def ce_gaussian_loss(dist, target, loss_weight):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # target distribution
+    target_dist = weight_left.new_full((weight_left.shape[0], \
+        config.project.shape[1]), 0, dtype=torch.float32)
+    target_dist[torch.arange(target_dist.shape[0]), idx_left] = weight_left
+    target_dist[torch.arange(target_dist.shape[0]), idx_right] = weight_right
+    # predict distribution
+    mean= dist[:, :4].reshape(-1, 1)
+    lstd= dist[:, 4:].reshape(-1, 1)
+    Qg = torch.distributions.normal.Normal(mean, lstd.exp())
+    project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0],1)
+    pred_dist = Qg.cdf(project + acc) - Qg.cdf(project - acc)
+    # CE distance
+    loss = F.cross_entropy(pred, dis_left, reduction='none') * target_dist \
+        + F.cross_entropy(pred, dis_right, reduction='none') * weight_right
+
+    total_dist = (target_dist + pred_dist) / 2
+    loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
+    loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
+    loss = (loss1 + loss2).sum(dim=1) / 2
+    return loss.reshape(-1, 4).sum(dim=1) * loss_weight
+
 def kl_gaussian_loss(dist, target, loss_weight):
     scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
     acc = 1 / scale / 2
