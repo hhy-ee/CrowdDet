@@ -80,12 +80,15 @@ class Config:
     negative_thresh = 0.4
     positive_thresh = 0.5
     allow_low_quality = True
-    save_data = False
+    save_data = True
+    add_test_noise = False
 
-    # -------------atss-config --------------------#
-    ignore_ioa_thr = 0.5
-    assign_topk = 9
+    # ----------freeanchor config---------- #
+    bbox_thr = 0.6
+    pre_anchor_topk = 50
+    loss_box_alpha = 0.5
+    loss_box_gamma = 2.0
     kl_weight = 1.0
-    project = np.linspace(-2, 2, 21)[None, :]
-
+    project = np.linspace(-1, 1, 21)[None, :]
+    
 config = Config()
