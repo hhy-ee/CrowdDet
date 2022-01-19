@@ -95,13 +95,8 @@ def ce_gaussian_loss(dist, target, loss_weight):
     project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0],1)
     pred_dist = Qg.cdf(project + acc) - Qg.cdf(project - acc)
     # CE distance
-    loss = F.cross_entropy(pred, dis_left, reduction='none') * target_dist \
-        + F.cross_entropy(pred, dis_right, reduction='none') * weight_right
-
-    total_dist = (target_dist + pred_dist) / 2
-    loss1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
-    loss2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
-    loss = (loss1 + loss2).sum(dim=1) / 2
+    loss = F.cross_entropy(pred_dist, idx_left, reduction='none') * weight_left \
+        + F.cross_entropy(pred_dist, idx_right, reduction='none') * weight_right
     return loss.reshape(-1, 4).sum(dim=1) * loss_weight
 
 def kl_gaussian_loss(dist, target, loss_weight):
