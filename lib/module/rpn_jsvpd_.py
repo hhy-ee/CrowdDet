@@ -45,11 +45,12 @@ class RPN(nn.Module):
             all_anchors_list.append(layer_anchors)
         # variational inference
         for dist in pred_bbox_dists_list:
-            pred_mean = dist[:, :4]
-            pred_lstd = dist[:, 4:]
+            N, C, W, H = dist.shape
+            pred_mean = dist.reshape(N, config.num_cell_anchors, 8, W, H)[:, :, :4]
+            pred_lstd = dist.reshape(N, config.num_cell_anchors, 8, W, H)[:, :, 4:]
             pred_offset = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
-            pred_bbox_offsets_list.append(pred_mean)
-            pred_bbox_vpd_offsets_list.append(pred_offset)
+            pred_bbox_offsets_list.append(pred_mean.reshape(N, -1, W, H))
+            pred_bbox_vpd_offsets_list.append(pred_offset.reshape(N, -1, W, H))
         # sample from the predictions
         rpn_rois = find_top_rpn_vpd_proposals(
                 self.training, pred_bbox_offsets_list, pred_bbox_vpd_offsets_list, 
