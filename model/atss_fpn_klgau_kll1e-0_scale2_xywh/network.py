@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.atss_anchor_target import atss_anchor_target, centerness_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, giou_loss, js_gaussian_loss
+from det_oprs.loss_opr import focal_loss, giou_loss, kl_gaussian_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -43,6 +43,26 @@ class Network(nn.Module):
             pred_bbox = per_layer_inference(
                     anchors_list, pred_cls_list, pred_reg_list, pred_ctn_list, im_info)
             return pred_bbox.cpu().detach()
+    
+    def inference(self, image, im_info, epoch=None, gt_boxes=None):
+        # pre-processing the data
+        image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
+                torch.tensor(config.image_std[None, :, None, None]).type_as(image))
+        image = get_padded_tensor(image, 64)
+        # do inference
+        # stride: 128,64,32,16,8, p7->p3
+        fpn_fms = self.FPN(image)
+        pred_cls_list, pred_reg_list, pred_ctn_list = self.R_Head(fpn_fms)
+        num_levels = [fm.shape for fm in fpn_fms]
+        pred_scr_list = []
+        pred_dist_list = []
+        for i in range(len(num_levels)):
+            w,h = num_levels[i][2:4]
+            pred_scr = pred_cls_list[i].reshape(1, w, h, 1).sigmoid()
+            pred_dist = pred_reg_list[i].reshape(1, w, h, 8)
+            pred_scr_list.append(pred_scr.cpu().detach())
+            pred_dist_list.append(pred_dist.cpu().detach())
+        return pred_scr_list, pred_dist_list
 
 class RetinaNet_Anchor():
     def __init__(self):
@@ -77,10 +97,8 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_lstd = all_pred_dist[:, 4:]
-        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        all_pred_reg = all_pred_mean
         # get ground truth
-        gt_boxes[:,:,:4] = gt_boxes[:,:,:4] + config.noise_sigma * torch.randn_like(gt_boxes[:,:,:4])
         labels, bbox_target = atss_anchor_target(all_anchors, gt_boxes, num_levels, im_info)
         fg_mask = (labels > 0).flatten()
         valid_mask = (labels >= 0).flatten()
@@ -98,7 +116,7 @@ class RetinaNet_Criteria(nn.Module):
                 labels[valid_mask],
                 config.focal_loss_alpha,
                 config.focal_loss_gamma)
-        loss_jsd = js_gaussian_loss(
+        loss_jsd = kl_gaussian_loss(
                 all_pred_dist[fg_mask],
                 bbox_target[fg_mask],
                 config.kl_weight)
