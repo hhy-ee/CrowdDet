@@ -87,5 +87,5 @@ class Config:
     assign_topk = 9
     kl_weight = 1.0
     project = np.linspace(-2, 2, 21)[None, :]
-    noise_sigma = 0.2
+    noise_sigma = 0.05
 config = Config()
