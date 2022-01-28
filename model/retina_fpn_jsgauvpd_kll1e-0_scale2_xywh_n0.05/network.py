@@ -12,6 +12,7 @@ from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.loss_opr import focal_loss, smooth_l1_loss, js_gaussian_loss
 from det_oprs.utils import get_padded_tensor
+from det_oprs.bbox_opr import box_overlap_opr, bbox_transform_opr, bbox_transform_inv_opr
 
 class Network(nn.Module):
     def __init__(self):
@@ -75,9 +76,17 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
-        all_pred_reg = all_pred_mean
+        all_pred_lstd = all_pred_dist[:, 4:]
+        all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
         # get ground truth
-        gt_boxes[:,:,:4] = gt_boxes[:,:,:4] + config.noise_sigma * torch.randn_like(gt_boxes[:,:,:4])
+        for bs in range(config.train_batch_per_gpu):
+            gt_boxes_perimg = gt_boxes[bs, :int(im_info[bs, 5]), :]
+            overlaps = box_overlap_opr(all_anchors, gt_boxes_perimg[:, :-1])
+            _, gt_assignment = overlaps.max(dim=0)
+            target_anchors = all_anchors[gt_assignment, :4]
+            bbox_targets = bbox_transform_opr(target_anchors, gt_boxes_perimg[:, :4])
+            bbox_targets = bbox_targets + config.noise_sigma * torch.randn_like(bbox_targets)
+            gt_boxes[bs, :int(im_info[bs, 5]), :4] = bbox_transform_inv_opr(target_anchors, bbox_targets)
         labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
         # regression loss
         fg_mask = (labels > 0).flatten()
