@@ -41,66 +41,70 @@ def atss_anchor_target(anchors, gt_boxes, num_levels, im_info):
             gt_assignment[ignore_idxs] = -1
 
         # Selecting candidates based on the center distance
-        candidate_idxs = []
-        start_idx = 0
-        for level, bboxes_per_level in enumerate(num_levels):
-            # on each pyramid level, for each gt,
-            # select k bbox whose center are closest to the gt center
-            end_idx = start_idx + bboxes_per_level
-            distances_per_level = distances[start_idx:end_idx, :]
-            selectable_k = min(config.assign_topk, bboxes_per_level)
-            _, topk_idxs_per_level = distances_per_level.topk(
-                selectable_k, dim=0, largest=False)
-            candidate_idxs.append(topk_idxs_per_level + start_idx)
-            start_idx = end_idx
-        candidate_idxs = torch.cat(candidate_idxs, dim=0)
+        if num_gt != 0:
+            candidate_idxs = []
+            start_idx = 0
+            for level, bboxes_per_level in enumerate(num_levels):
+                # on each pyramid level, for each gt,
+                # select k bbox whose center are closest to the gt center
+                end_idx = start_idx + bboxes_per_level
+                distances_per_level = distances[start_idx:end_idx, :]
+                selectable_k = min(config.assign_topk, bboxes_per_level)
+                _, topk_idxs_per_level = distances_per_level.topk(
+                    selectable_k, dim=0, largest=False)
+                candidate_idxs.append(topk_idxs_per_level + start_idx)
+                start_idx = end_idx
+            candidate_idxs = torch.cat(candidate_idxs, dim=0)
 
-        # get corresponding iou for the these candidates, and compute the
-        # mean and std, set mean + std as the iou threshold
-        candidate_overlaps = overlaps[candidate_idxs, torch.arange(num_gt)]
-        overlaps_mean_per_gt = candidate_overlaps.mean(0)
-        overlaps_std_per_gt = candidate_overlaps.std(0)
-        overlaps_thr_per_gt = overlaps_mean_per_gt + overlaps_std_per_gt
-        is_pos = candidate_overlaps >= overlaps_thr_per_gt[None, :]
+            # get corresponding iou for the these candidates, and compute the
+            # mean and std, set mean + std as the iou threshold
+            candidate_overlaps = overlaps[candidate_idxs, torch.arange(num_gt)]
+            overlaps_mean_per_gt = candidate_overlaps.mean(0)
+            overlaps_std_per_gt = candidate_overlaps.std(0)
+            overlaps_thr_per_gt = overlaps_mean_per_gt + overlaps_std_per_gt
+            is_pos = candidate_overlaps >= overlaps_thr_per_gt[None, :]
 
-        # limit the positive sample's center in gt
-        for gt_idx in range(num_gt):
-            candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
-        ep_bboxes_cx = bboxes_cx.view(1, -1).expand(
-            num_gt, num_bboxes).contiguous().view(-1)
-        ep_bboxes_cy = bboxes_cy.view(1, -1).expand(
-            num_gt, num_bboxes).contiguous().view(-1)
-        candidate_idxs = candidate_idxs.view(-1)
+            # limit the positive sample's center in gt
+            for gt_idx in range(num_gt):
+                candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
+            ep_bboxes_cx = bboxes_cx.view(1, -1).expand(
+                num_gt, num_bboxes).contiguous().view(-1)
+            ep_bboxes_cy = bboxes_cy.view(1, -1).expand(
+                num_gt, num_bboxes).contiguous().view(-1)
+            candidate_idxs = candidate_idxs.view(-1)
 
-        # calculate the left, top, right, bottom distance between positive
-        # bbox center and gt side
-        l_ = ep_bboxes_cx[candidate_idxs].view(-1, num_gt) - gt_boxes_perimg[:, 0]
-        t_ = ep_bboxes_cy[candidate_idxs].view(-1, num_gt) - gt_boxes_perimg[:, 1]
-        r_ = gt_boxes_perimg[:, 2] - ep_bboxes_cx[candidate_idxs].view(-1, num_gt)
-        b_ = gt_boxes_perimg[:, 3] - ep_bboxes_cy[candidate_idxs].view(-1, num_gt)
-        is_in_gts = torch.stack([l_, t_, r_, b_], dim=1).min(dim=1)[0] > 0.01
-        is_pos = is_pos & is_in_gts
+            # calculate the left, top, right, bottom distance between positive
+            # bbox center and gt side
+            l_ = ep_bboxes_cx[candidate_idxs].view(-1, num_gt) - gt_boxes_perimg[:, 0]
+            t_ = ep_bboxes_cy[candidate_idxs].view(-1, num_gt) - gt_boxes_perimg[:, 1]
+            r_ = gt_boxes_perimg[:, 2] - ep_bboxes_cx[candidate_idxs].view(-1, num_gt)
+            b_ = gt_boxes_perimg[:, 3] - ep_bboxes_cy[candidate_idxs].view(-1, num_gt)
+            is_in_gts = torch.stack([l_, t_, r_, b_], dim=1).min(dim=1)[0] > 0.01
+            is_pos = is_pos & is_in_gts
 
-        # if an anchor box is assigned to multiple gts,
-        # the one with the highest IoU will be selected.
-        index = candidate_idxs.view(-1)[is_pos.view(-1)]
-        overlaps_inf[index] = overlaps.t().contiguous().view(-1)[index]
-        overlaps_inf = overlaps_inf.view(num_gt, -1).t()
-        max_overlaps, argmax_overlaps = overlaps_inf.max(dim=1)
-        gt_assignment[max_overlaps != -INF] = argmax_overlaps[max_overlaps != -INF] + 1
+            # if an anchor box is assigned to multiple gts,
+            # the one with the highest IoU will be selected.
+            index = candidate_idxs.view(-1)[is_pos.view(-1)]
+            overlaps_inf[index] = overlaps.t().contiguous().view(-1)[index]
+            overlaps_inf = overlaps_inf.view(num_gt, -1).t()
+            max_overlaps, argmax_overlaps = overlaps_inf.max(dim=1)
+            gt_assignment[max_overlaps != -INF] = argmax_overlaps[max_overlaps != -INF] + 1
+            # cons bbox targets
+            target_boxes = gt_boxes_perimg[gt_assignment - 1, :4]
+            bbox_targets = bbox_transform_opr(anchors, target_boxes)
+            bbox_targets = bbox_targets.reshape(-1, 4)
+        else:
+            bbox_targets = torch.zeros_like(anchors)
+        # cons anchor labels
         pos_inds = torch.nonzero(gt_assignment > 0, as_tuple=False).squeeze()
         ign_inds = torch.nonzero(gt_assignment < 0, as_tuple=False).squeeze()
-        # cons labels
         labels = gt_assignment.new_full((num_bboxes, ), 0, dtype=torch.float32)
         if pos_inds.numel() > 0:
             labels[pos_inds] = 1
         if ign_inds.numel() > 0:
             labels[ign_inds] = -1
-        # cons bbox targets
-        target_boxes = gt_boxes_perimg[gt_assignment - 1, :4]
-        bbox_targets = bbox_transform_opr(anchors, target_boxes)
         labels = labels.reshape(-1, 1)
-        bbox_targets = bbox_targets.reshape(-1, 4)
+        
         return_labels.append(labels)
         return_bbox_targets.append(bbox_targets)
 
