@@ -11,7 +11,7 @@ root_dir = os.path.dirname(__file__).split('model')[0]
 model_dir = os.path.dirname(__file__)
 
 class Crowd_human:
-    class_names = ['background', 'person']
+    class_names = ['background', 'pedestrian']
     num_classes = len(class_names)
     root_folder = os.path.join(root_dir, 'data/CityPersons')
     image_folder = os.path.join(root_dir, 'data/CityPersons/leftImg8bit/train')
@@ -51,9 +51,9 @@ class Config:
     focal_loss_gamma = 2
 
     warm_iter = 800
-    max_epoch = 31
+    max_epoch = 30
     lr_decay = [24, 27]
-    nr_images_epoch = 32929
+    nr_images_epoch = 2975
     log_dump_interval = 20
 
     # ----------test config---------- #
