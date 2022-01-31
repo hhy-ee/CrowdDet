@@ -285,10 +285,10 @@ class Image(object):
                 if 'ignore' in rb['head_attr']:
                     if rb['head_attr']['ignore'] != 0:
                         head_tag = -1
-            head_bbox.append(np.hstack((rb['hbox'], head_tag)))
+            # head_bbox.append(np.hstack((rb['hbox'], head_tag)))
             body_bbox.append(np.hstack((rb['fbox'], body_tag)))
-        head_bbox = np.array(head_bbox)
-        head_bbox[:, 2:4] += head_bbox[:, :2]
+        # head_bbox = np.array(head_bbox)
+        # head_bbox[:, 2:4] += head_bbox[:, :2]
         body_bbox = np.array(body_bbox)
         body_bbox[:, 2:4] += body_bbox[:, :2]
         return body_bbox, head_bbox
