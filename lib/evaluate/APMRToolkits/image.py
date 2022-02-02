@@ -74,10 +74,10 @@ class Image(object):
 
         dtboxes = np.array(sorted(dtboxes, key=lambda x: x[-1], reverse=True))
         gtboxes = np.array(sorted(gtboxes, key=lambda x: x[-1], reverse=True))
-        if len(dtboxes):
+        if len(dtboxes) and len(gtboxes):
             overlap_iou = self.box_overlap_opr(dtboxes, gtboxes, True)
             overlap_ioa = self.box_overlap_opr(dtboxes, gtboxes, False)
-        else:
+        elif len(dtboxes) == 0:
             return list()
 
         scorelist = list()
@@ -266,7 +266,7 @@ class Image(object):
     def load_gt_boxes(self, dict_input, key_name, class_names):
         assert key_name in dict_input
         if len(dict_input[key_name]) < 1:
-            return np.empty([0, 5])
+            return np.empty([0, 5]), np.empty([0, 5])
         head_bbox = []
         body_bbox = []
         for rb in dict_input[key_name]:

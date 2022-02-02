@@ -2,6 +2,7 @@ import os
 import json
 import numpy as np
 from .image import *
+from data.CityPersons import load_json_lines
 
 PERSON_CLASSES = ['background', 'person']
 # DBBase
@@ -12,27 +13,37 @@ class Database(object):
         """
         self.images = dict()
         self.eval_mode = mode
-        self.loadData(gtpath, body_key, head_key, True)
-        self.loadData(dtpath, body_key, head_key, False)
+        self.loadgtData(gtpath, body_key, head_key)
+        self.loaddtData(dtpath, body_key, head_key)
 
         self._ignNum = sum([self.images[i]._ignNum for i in self.images])
         self._gtNum = sum([self.images[i]._gtNum for i in self.images])
         self._imageNum = len(self.images)
         self.scorelist = None
 
-    def loadData(self, fpath, body_key=None, head_key=None, if_gt=True):
+    def loadgtData(self, fpath, body_key=None, head_key=None):
+        if 'CityPersons' in fpath:
+            records = load_json_lines(fpath)
+            for record in records:
+                self.images[record["ID"]] = Image(self.eval_mode)
+                self.images[record["ID"]].load(record, body_key, head_key, ['background', 'pedestrian'], True)
+        else:
+            assert os.path.isfile(fpath), fpath + " does not exist!"
+            with open(fpath, "r") as f:
+                lines = f.readlines()
+            records = [json.loads(line.strip('\n')) for line in lines]
+            for record in records:
+                self.images[record["ID"]] = Image(self.eval_mode)
+                self.images[record["ID"]].load(record, body_key, head_key, ['background', 'person'], True)
+
+    def loaddtData(self, fpath, body_key=None, head_key=None):
         assert os.path.isfile(fpath), fpath + " does not exist!"
         with open(fpath, "r") as f:
             lines = f.readlines()
         records = [json.loads(line.strip('\n')) for line in lines]
-        if if_gt:
-            for record in records:
-                self.images[record["ID"]] = Image(self.eval_mode)
-                self.images[record["ID"]].load(record, body_key, head_key, PERSON_CLASSES, True)
-        else:
-            for record in records:
-                self.images[record["ID"]].load(record, body_key, head_key, PERSON_CLASSES, False)
-                self.images[record["ID"]].clip_all_boader()
+        for record in records:
+            self.images[record["ID"]].load(record, body_key, head_key, PERSON_CLASSES, False)
+            self.images[record["ID"]].clip_all_boader()
 
     def compare(self, thres=0.5, matching=None):
         """

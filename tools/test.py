@@ -17,6 +17,7 @@ sys.path.insert(0, lib_dir)
 sys.path.insert(0, model_dir)
 
 from data.CrowdHuman import CrowdHuman
+from data.CityPersons import CityPersons
 from utils import misc_utils, nms_utils
 from evaluate import compute_JI, compute_APMR
 
@@ -83,7 +84,10 @@ def eval_all_epoch(args, config, network):
         str_devices = args.devices
         devices = misc_utils.device_parser(str_devices)
         # load data
-        crowdhuman = CrowdHuman(config, if_train=False)
+        if 'CityPersons' in config.train_source:
+            crowdhuman = CityPersons(config, if_train=False)
+        else:
+            crowdhuman = CrowdHuman(config, if_train=False)
         # multiprocessing
         num_devs = len(devices)
         len_dataset = len(crowdhuman)
@@ -239,7 +243,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'rcnn_mip_single_vpd_kll1e-1_prior_p1_xywh', 
+    # args = parser.parse_args(['--model_dir', 'atss_fpn_jsgauvpd_kll1e-0_scale2_xywh_CityPersons', 
     #                           '--resume_weights', '30'])
 
     # import libs
