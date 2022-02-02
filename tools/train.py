@@ -13,6 +13,7 @@ sys.path.insert(0, lib_dir)
 sys.path.insert(0, model_dir)
 
 from data.CrowdHuman import CrowdHuman
+from data.CityPersons import CityPersons
 from utils import misc_utils, SGD_bias
 from test import eval_all_epoch
 
@@ -107,7 +108,10 @@ def train_worker(rank, train_config, network, config):
     # using distributed data parallel
     net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[rank], broadcast_buffers=False, find_unused_parameters=True)
     # build data provider
-    crowdhuman = CrowdHuman(config, if_train=True)
+    if 'CityPersons' in config.train_source:
+        crowdhuman = CityPersons(config, if_train=True)
+    else:
+        crowdhuman = CrowdHuman(config, if_train=True)
     data_iter = torch.utils.data.DataLoader(dataset=crowdhuman,
             batch_size=train_config.mini_batch_size,
             num_workers=2,

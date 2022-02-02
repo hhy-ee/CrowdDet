@@ -20,26 +20,31 @@ def fa_anchor_target(anchors, gt_boxes, im_info, top_k):
         overlaps = box_overlap_opr(anchors, gt_boxes_perimg[:, :-1])
         overlaps_inf = torch.full_like(overlaps, -INF).t().contiguous().view(-1)
         gt_assignment = overlaps.new_full((num_bboxes, ), 0, dtype=torch.long)
+        # labels
+        labels = gt_assignment.new_full((num_bboxes, ), 0, dtype=torch.float32)
+        if num_gt != 0:
         # gt max and indices
-        candidate_overlaps, candidate_idxs = overlaps.topk(top_k, dim=0, sorted=True)
-        del overlaps
-        for gt_idx in range(num_gt):
-            candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
-        candidate_idxs = candidate_idxs.view(-1)
-        overlaps_inf[candidate_idxs] = candidate_overlaps.view(-1)
-        overlaps_inf = overlaps_inf.view(num_gt, -1).t()
-        max_overlaps, argmax_overlaps = overlaps_inf.max(dim=1)
-        gt_assignment[max_overlaps != -INF] = argmax_overlaps[max_overlaps != -INF] + 1
-        pos_inds = torch.nonzero(gt_assignment > 0, as_tuple=False).squeeze()
-        # cons labels
-        labels = gt_assignment.new_full((num_bboxes, ), -1, dtype=torch.float32)
-        if pos_inds.numel() > 0:
-            labels[pos_inds] = gt_boxes_perimg[gt_assignment[pos_inds]-1, -1]
-        # cons bbox targets
-        target_boxes = gt_boxes_perimg[gt_assignment - 1, :4]
-        bbox_targets = bbox_transform_opr(anchors, target_boxes)
-        labels = labels.reshape(-1, 1)
-        bbox_targets = bbox_targets.reshape(-1, 4)
+            candidate_overlaps, candidate_idxs = overlaps.topk(top_k, dim=0, sorted=True)
+            del overlaps
+            for gt_idx in range(num_gt):
+                candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
+            candidate_idxs = candidate_idxs.view(-1)
+            overlaps_inf[candidate_idxs] = candidate_overlaps.view(-1)
+            overlaps_inf = overlaps_inf.view(num_gt, -1).t()
+            max_overlaps, argmax_overlaps = overlaps_inf.max(dim=1)
+            gt_assignment[max_overlaps != -INF] = argmax_overlaps[max_overlaps != -INF] + 1
+            pos_inds = torch.nonzero(gt_assignment > 0, as_tuple=False).squeeze()
+            # cons labels
+            if pos_inds.numel() > 0:
+                labels[pos_inds] = gt_boxes_perimg[gt_assignment[pos_inds]-1, -1]
+            # cons bbox targets
+            target_boxes = gt_boxes_perimg[gt_assignment - 1, :4]
+            bbox_targets = bbox_transform_opr(anchors, target_boxes)
+            labels = labels.reshape(-1, 1)
+            bbox_targets = bbox_targets.reshape(-1, 4)
+        else:
+            labels = labels.reshape(-1, 1)
+            bbox_targets = torch.zeros_like(anchors)
         return_labels.append(labels)
         return_bbox_targets.append(bbox_targets)
 
