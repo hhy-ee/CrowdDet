@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import math
 import argparse
@@ -35,8 +35,7 @@ def eval_all(args, config, network):
     crowdhuman = CrowdHuman(config, if_train=False)
     # multiprocessing
     num_devs = len(devices)
-    # len_dataset = len(crowdhuman)
-    len_dataset = 5
+    len_dataset = len(crowdhuman)
     num_image = math.ceil(len_dataset / num_devs)
     result_queue = Queue(500)
     procs = []
@@ -59,7 +58,7 @@ def eval_all(args, config, network):
     fpath = os.path.join(evalDir, 'dump-{}.json'.format(args.resume_weights))
     misc_utils.save_json_lines(all_results, fpath)
     # evaluation
-    eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format(args.occlusion, args.resume_weights))
+    eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format('occ', args.resume_weights))
     eval_fid = open(eval_path,'w')
     # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     # for line in res_line:
@@ -72,7 +71,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(26, int(args.resume_weights)+1):
+    for epoch_id in range(30, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -87,7 +86,8 @@ def eval_all_epoch(args, config, network):
         crowdhuman = CrowdHuman(config, if_train=False)
         # multiprocessing
         num_devs = len(devices)
-        len_dataset = len(crowdhuman)
+        # len_dataset = len(crowdhuman)
+        len_dataset = 20
         num_image = math.ceil(len_dataset / num_devs)
         result_queue = Queue(500)
         procs = []
@@ -110,12 +110,17 @@ def eval_all_epoch(args, config, network):
         fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(epoch_id)))
         misc_utils.save_json_lines(all_results, fpath)
         # evaluation
-        eval_path = os.path.join(evalDir, 'eval-{}.json'.format(str(epoch_id)))
+        eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format(args.occlusion, args.resume_weights))
         eval_fid = open(eval_path,'w')
         # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
         # for line in res_line:
         #     eval_fid.write(line+'\n')
-        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
+        if args.occlusion == 'Bare':
+            AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=3)
+        elif args.occlusion == 'Partial':
+            AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=4)
+        elif args.occlusion == 'Heavy':
+            AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=5)
         # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
         line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
         print(line)
@@ -240,17 +245,17 @@ def run_test():
     parser.add_argument('--occlusion', '-o', default='all', type=str)
     os.environ['NCCL_IB_DISABLE'] = '1'
 
-    # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
-                              '--resume_weights', '30',
-                              '--occlusion', 'partial'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
+    #                           '--resume_weights', '30',
+    #                           '--occlusion', 'Bare'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    eval_all(args, config, Network)
+    eval_all_epoch(args, config, Network)
 
 def save_data(scores, ious, dists):
     import numpy as np

@@ -25,7 +25,7 @@ class Image(object):
             self._height = record["height"]
         if gtflag:
             self._gtNum = len(record["gtboxes"])
-            body_bbox, head_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
+            body_bbox, head_bbox, vis_bbox = self.load_gt_boxes(record, 'gtboxes', class_names)
             if self.eval_mode == 0:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
@@ -36,7 +36,19 @@ class Image(object):
                 gt_tag = np.array([body_bbox[i,-1]!=-1 and head_bbox[i,-1]!=-1 for i in range(len(body_bbox))])
                 self._ignNum = (gt_tag == 0).sum()
                 self.gtboxes = np.hstack((body_bbox[:, :-1], head_bbox[:, :-1], gt_tag.reshape(-1, 1)))
-            elif self.eval_mode >= 3:
+            elif self.eval_mode == 3:
+                body_bbox = self.occ_division(body_bbox, vis_bbox, [0.0, 0.3])
+                self.gtboxes = body_bbox
+                self._ignNum = (body_bbox[:, -1] == -1).sum()
+            elif self.eval_mode == 4:
+                body_bbox = self.occ_division(body_bbox, vis_bbox, [0.3, 0.7])
+                self.gtboxes = body_bbox
+                self._ignNum = (body_bbox[:, -1] == -1).sum()
+            elif self.eval_mode == 5:
+                body_bbox = self.occ_division(body_bbox, vis_bbox, [0.7, 1.0])
+                self.gtboxes = body_bbox
+                self._ignNum = (body_bbox[:, -1] == -1).sum()
+            elif self.eval_mode >= 10:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
             else:
@@ -51,14 +63,26 @@ class Image(object):
                 body_dtboxes = self.load_det_boxes(record, 'dtboxes', body_key)
                 head_dtboxes = self.load_det_boxes(record, 'dtboxes', head_key, 'score')
                 self.dtboxes = np.hstack((body_dtboxes, head_dtboxes))
-            elif self.eval_mode == 3:
+            elif self.eval_mode == 3 or self.eval_mode == 4 or self.eval_mode == 5:
+                self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score')
+            elif self.eval_mode == 11:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd')
-            elif self.eval_mode == 4:
+            elif self.eval_mode == 12:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num')
-            elif self.eval_mode == 5:
+            elif self.eval_mode == 13:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd', 'proposal_num', 'mip_data')
             else:
                 raise Exception('Unknown evaluation mode!')
+
+    def occ_division(self, gtboxes, visboxes, occ_level):
+        if gtboxes.shape[0] != 0:
+            occ = 1 - np.diag(self.box_overlap_opr(gtboxes, visboxes, True))
+            occ_tag = (occ >= occ_level[0]) * (occ <= occ_level[1])
+            gt_tag = gtboxes[:, -1] > 0
+            gtboxes[:, -1] = occ_tag * gt_tag * 2 - 1
+            return gtboxes
+        else:
+            return gtboxes
 
     def compare_caltech(self, thres):
         """
@@ -266,9 +290,10 @@ class Image(object):
     def load_gt_boxes(self, dict_input, key_name, class_names):
         assert key_name in dict_input
         if len(dict_input[key_name]) < 1:
-            return np.empty([0, 5]), np.empty([0, 5])
+            return np.empty([0, 5]), np.empty([0, 5]), np.empty([0, 5])
         head_bbox = []
         body_bbox = []
+        vis_bbox = []
         for rb in dict_input[key_name]:
             if rb['tag'] in class_names:
                 body_tag = class_names.index(rb['tag'])
@@ -287,11 +312,14 @@ class Image(object):
                         head_tag = -1
             # head_bbox.append(np.hstack((rb['hbox'], head_tag)))
             body_bbox.append(np.hstack((rb['fbox'], body_tag)))
+            vis_bbox.append(np.hstack((rb['vbox'], body_tag)))
         # head_bbox = np.array(head_bbox)
         # head_bbox[:, 2:4] += head_bbox[:, :2]
         body_bbox = np.array(body_bbox)
         body_bbox[:, 2:4] += body_bbox[:, :2]
-        return body_bbox, head_bbox
+        vis_bbox = np.array(vis_bbox)
+        vis_bbox[:, 2:4] += vis_bbox[:, :2]
+        return body_bbox, head_bbox, vis_bbox
 
     def load_det_boxes(self, dict_input, key_name, key_box, key_score=None, key_tag=None, key_ex=None, key_ex1=None):
         assert key_name in dict_input
