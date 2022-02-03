@@ -15,7 +15,7 @@ class Crowd_human:
     num_classes = len(class_names)
     root_folder = os.path.join(root_dir, 'data/CityPersons')
     image_folder = os.path.join(root_dir, 'data/CityPersons/leftImg8bit/train')
-    train_source = os.path.join(root_dir, 'data/CityPersons/gtBboxCityPersons/train')
+    train_source = os.path.join(root_dir, 'data/CityPersons/train.json')
     eval_source = os.path.join(root_dir, 'data/CityPersons/gtBboxCityPersons/val')
 
 class Config:
