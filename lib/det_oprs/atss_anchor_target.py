@@ -116,19 +116,23 @@ def atss_anchor_target(anchors, gt_boxes, num_levels, im_info):
         return return_labels, return_bbox_targets
 
 def centerness_target(anchors, bbox_targets):
-    # only calculate pos centerness targets, otherwise there may be nan
-    gts = bbox_transform_inv_opr(anchors, bbox_targets)
-    anchors_cx = (anchors[:, 2] + anchors[:, 0]) / 2
-    anchors_cy = (anchors[:, 3] + anchors[:, 1]) / 2
-    l_ = anchors_cx - gts[:, 0]
-    t_ = anchors_cy - gts[:, 1]
-    r_ = gts[:, 2] - anchors_cx
-    b_ = gts[:, 3] - anchors_cy
+    num_gt = bbox_targets.shape[0]
+    if num_gt != 0:
+        # only calculate pos centerness targets, otherwise there may be nan
+        gts = bbox_transform_inv_opr(anchors, bbox_targets)
+        anchors_cx = (anchors[:, 2] + anchors[:, 0]) / 2
+        anchors_cy = (anchors[:, 3] + anchors[:, 1]) / 2
+        l_ = anchors_cx - gts[:, 0]
+        t_ = anchors_cy - gts[:, 1]
+        r_ = gts[:, 2] - anchors_cx
+        b_ = gts[:, 3] - anchors_cy
 
-    left_right = torch.stack([l_, r_], dim=1)
-    top_bottom = torch.stack([t_, b_], dim=1)
-    centerness = torch.sqrt(
-        (left_right.min(dim=-1)[0] / left_right.max(dim=-1)[0]) *
-        (top_bottom.min(dim=-1)[0] / top_bottom.max(dim=-1)[0]))
-    assert not torch.isnan(centerness).any()
+        left_right = torch.stack([l_, r_], dim=1)
+        top_bottom = torch.stack([t_, b_], dim=1)
+        centerness = torch.sqrt(
+            (left_right.min(dim=-1)[0] / left_right.max(dim=-1)[0]) *
+            (top_bottom.min(dim=-1)[0] / top_bottom.max(dim=-1)[0]))
+        assert not torch.isnan(centerness).any()
+    else:
+        centerness = torch.zeros(0).type_as(bbox_targets)
     return centerness
