@@ -55,15 +55,20 @@ def eval_all(args, config, network):
     pbar.close()
     for p in procs:
         p.join()
-    fpath = os.path.join(evalDir, 'dump-{}.json'.format(args.resume_weights))
+    fpath = os.path.join(evalDir, 'dump-{}-{}.json'.format(args.occlusion, args.resume_weights))
     misc_utils.save_json_lines(all_results, fpath)
     # evaluation
-    eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format('occ', args.resume_weights))
+    eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format(args.occlusion, args.resume_weights))
     eval_fid = open(eval_path,'w')
     # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     # for line in res_line:
     #     eval_fid.write(line+'\n')
-    AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
+    if args.occlusion == 'Bare':
+        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=3)
+    elif args.occlusion == 'Partial':
+        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=4)
+    elif args.occlusion == 'Heavy':
+        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=5)
     # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
     line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
     print(line)
@@ -86,8 +91,7 @@ def eval_all_epoch(args, config, network):
         crowdhuman = CrowdHuman(config, if_train=False)
         # multiprocessing
         num_devs = len(devices)
-        # len_dataset = len(crowdhuman)
-        len_dataset = 20
+        len_dataset = len(crowdhuman)
         num_image = math.ceil(len_dataset / num_devs)
         result_queue = Queue(500)
         procs = []
@@ -107,7 +111,7 @@ def eval_all_epoch(args, config, network):
         pbar.close()
         for p in procs:
             p.join()
-        fpath = os.path.join(evalDir, 'dump-{}.json'.format(str(epoch_id)))
+        fpath = os.path.join(evalDir, 'dump-{}-{}.json'.format(args.occlusion, str(epoch_id)))
         misc_utils.save_json_lines(all_results, fpath)
         # evaluation
         eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format(args.occlusion, args.resume_weights))
@@ -255,7 +259,7 @@ def run_test():
     sys.path.insert(0, model_root_dir)
     from config import config
     from network import Network
-    eval_all_epoch(args, config, Network)
+    eval_all(args, config, Network)
 
 def save_data(scores, ious, dists):
     import numpy as np
