@@ -11,12 +11,12 @@ root_dir = os.path.dirname(__file__).split('model')[0]
 model_dir = os.path.dirname(__file__)
 
 class Crowd_human:
-    class_names = ['background', 'pedestrian']
+    class_names = ['background', 'person']
     num_classes = len(class_names)
-    root_folder = os.path.join(root_dir, 'data/CityPersons')
-    image_folder = os.path.join(root_dir, 'data/CityPersons/leftImg8bit/train')
-    train_source = os.path.join(root_dir, 'data/CityPersons/train.json')
-    eval_source = os.path.join(root_dir, 'data/CityPersons/gtBboxCityPersons/val')
+    root_folder = os.path.join(root_dir, 'data/CrowdHuman')
+    image_folder = os.path.join(root_dir, 'data/CrowdHuman/Images')
+    train_source = os.path.join(root_dir, 'data/CrowdHuman/annotation_train.odgt')
+    eval_source = os.path.join(root_dir, 'data/CrowdHuman/annotation_val.odgt')
 
 class Config:
     output_dir = os.path.join(model_dir, 'outputs')
@@ -53,7 +53,7 @@ class Config:
     warm_iter = 800
     max_epoch = 30
     lr_decay = [24, 27]
-    nr_images_epoch = 2778
+    nr_images_epoch = 15000
     log_dump_interval = 20
 
     # ----------test config---------- #
@@ -72,7 +72,7 @@ class Config:
     # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
     # anchor_aspect_ratios = [1, 2, 3]
     anchor_base_scale = [2**0]
-    anchor_aspect_ratios = [2]
+    anchor_aspect_ratios = [1]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
@@ -81,14 +81,11 @@ class Config:
     positive_thresh = 0.5
     allow_low_quality = True
     save_data = True
-    add_test_noise = False
 
     # ----------freeanchor config---------- #
     bbox_thr = 0.6
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
-    kl_weight = 1.0
-    project = np.linspace(-1, 1, 21)[None, :]
-    
+
 config = Config()
