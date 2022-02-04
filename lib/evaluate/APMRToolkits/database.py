@@ -13,7 +13,7 @@ class Database(object):
         """
         self.images = dict()
         self.eval_mode = mode
-        self.loadgtData(gtpath, body_key, head_key)
+        self.loadgtData(gtpath, body_key, head_key, mode)
         self.loaddtData(dtpath, body_key, head_key)
 
         self._ignNum = sum([self.images[i]._ignNum for i in self.images])
@@ -21,9 +21,9 @@ class Database(object):
         self._imageNum = len(self.images)
         self.scorelist = None
 
-    def loadgtData(self, fpath, body_key=None, head_key=None):
+    def loadgtData(self, fpath, body_key=None, head_key=None, mode=None):
         if 'CityPersons' in fpath:
-            records = load_json_lines(fpath)
+            records = load_json_lines(fpath, False, mode)
             for record in records:
                 self.images[record["ID"]] = Image(self.eval_mode)
                 self.images[record["ID"]].load(record, body_key, head_key, ['background', 'pedestrian'], True)

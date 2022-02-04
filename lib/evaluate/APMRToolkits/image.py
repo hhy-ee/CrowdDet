@@ -36,6 +36,7 @@ class Image(object):
                 gt_tag = np.array([body_bbox[i,-1]!=-1 and head_bbox[i,-1]!=-1 for i in range(len(body_bbox))])
                 self._ignNum = (gt_tag == 0).sum()
                 self.gtboxes = np.hstack((body_bbox[:, :-1], head_bbox[:, :-1], gt_tag.reshape(-1, 1)))
+            # CrowdHuman occlusion
             elif self.eval_mode == 3:
                 body_bbox = self.occ_division(body_bbox, vis_bbox, [0.0, 0.3])
                 self.gtboxes = body_bbox
@@ -48,7 +49,8 @@ class Image(object):
                 body_bbox = self.occ_division(body_bbox, vis_bbox, [0.7, 1.0])
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
-            elif self.eval_mode >= 10:
+            # CityPersons occlusion
+            elif self.eval_mode >= 6:
                 self.gtboxes = body_bbox
                 self._ignNum = (body_bbox[:, -1] == -1).sum()
             else:
@@ -63,7 +65,7 @@ class Image(object):
                 body_dtboxes = self.load_det_boxes(record, 'dtboxes', body_key)
                 head_dtboxes = self.load_det_boxes(record, 'dtboxes', head_key, 'score')
                 self.dtboxes = np.hstack((body_dtboxes, head_dtboxes))
-            elif self.eval_mode == 3 or self.eval_mode == 4 or self.eval_mode == 5:
+            elif self.eval_mode >= 3 and self.eval_mode <= 8:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score')
             elif self.eval_mode == 11:
                 self.dtboxes = self.load_det_boxes(record, 'dtboxes', body_key, 'score', 'lstd')

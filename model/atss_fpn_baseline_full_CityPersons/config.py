@@ -16,7 +16,7 @@ class Crowd_human:
     root_folder = os.path.join(root_dir, 'data/CityPersons')
     image_folder = os.path.join(root_dir, 'data/CityPersons/leftImg8bit/train')
     train_source = os.path.join(root_dir, 'data/CityPersons/train.json')
-    eval_source = os.path.join(root_dir, 'data/CityPersons/gtBboxCityPersons/val')
+    eval_source = os.path.join(root_dir, 'data/CityPersons/val_gt.json')
 
 class Config:
     output_dir = os.path.join(model_dir, 'outputs')
@@ -51,8 +51,8 @@ class Config:
     focal_loss_gamma = 2
 
     warm_iter = 800
-    max_epoch = 30
-    lr_decay = [24, 27]
+    max_epoch = 60
+    lr_decay = [54, 57]
     nr_images_epoch = 2778
     log_dump_interval = 20
 

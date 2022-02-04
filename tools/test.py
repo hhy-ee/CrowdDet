@@ -72,7 +72,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(26, int(args.resume_weights)+1):
+    for epoch_id in range(56, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -118,9 +118,16 @@ def eval_all_epoch(args, config, network):
         # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
         # for line in res_line:
         #     eval_fid.write(line+'\n')
-        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
-        # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
-        line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
+        if 'CityPersons' in config.train_source:
+            AP1, MR1 = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', 6)
+            AP2, MR2 = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', 7)
+            AP3, MR3 = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', 8)
+            line = 'ALL: AP:{:.4f}, MR:{:.4f}. R: AP:{:.4f}, MR:{:.4f}. HO: AP:{:.4f}, MR:{:.4f}.'.\
+                format(AP1, MR1, AP2, MR2, AP3, MR3)
+        else:
+            AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box')
+            # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
+            line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
         print(line)
         eval_fid.write(line+'\n')
         eval_fid.close()
@@ -139,7 +146,7 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
     data_iter = torch.utils.data.DataLoader(dataset=dataset, shuffle=False)
     # inference
     for (image, gt_boxes, im_info, ID) in data_iter:
-        pred_boxes = net(image.cuda(device), im_info.cuda(device))
+        pred_boxes = net(image.cuda(device), im_info.cuda(device), gt_boxes=gt_boxes)
         scale = im_info[0, 2]
         if config.test_nms_method == 'set_nms':
             assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
@@ -164,21 +171,27 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.set_cpu_kl_nms(pred_boxes, 0.5)
             pred_boxes = pred_boxes[keep]
-        elif config.test_nms_method == 'normal_nms':
-            if not config.save_data:
-                assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
-                pred_boxes = pred_boxes.reshape(-1, 6)
-            else:
-                pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
+        elif config.test_nms_method == 'normal_nms' and not config.save_data:
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
-            if config.save_data:
-                pred_scores = pred_boxes[:, 4].reshape(-1, 1)
-                pred_tags = pred_boxes[:, 5].reshape(-1, 1)
-                pred_lstd = pred_boxes[:, 6:]
-                save_data(pred_scores, pred_tags, pred_lstd)
+            pred_boxes = pred_boxes[:, :6]
+        elif config.test_nms_method == 'normal_nms' and config.save_data:
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
+            keep = pred_boxes[:, 4] > config.visulize_threshold
+            pred_boxes = pred_boxes[keep]
+            bboxes_pred = pred_boxes[:, 6:10]
+            target_pred = pred_boxes[:, 10:14]
+            # xy[0,1] xw[0,2] wh[2,3] yh[1,3]
+            target_x = target_pred[:, 0]
+            target_y = target_pred[:, 1]
+            idx = torch.where((torch.abs(target_x) > 0.4) * (torch.abs(target_x) < 0.8) * \
+                 (torch.abs(target_y) > 0.4) * (torch.abs(target_y) < 0.8))[0]
+            save_gradient_data((bboxes_pred - target_pred)[idx][:, :2])
+            keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
+            pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
@@ -243,7 +256,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'atss_fpn_jsgauvpd_kll1e-0_scale2_xywh_CityPersons', 
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
     #                           '--resume_weights', '30'])
 
     # import libs
@@ -257,6 +270,14 @@ def save_data(scores, ious, dists):
     import numpy as np
     f = open("./vis_data.txt",'a')
     data = torch.cat([scores, ious, dists], dim=1)
+    data = data.detach().cpu().numpy()
+    np.savetxt(f, data)
+    f.close()
+    return 0
+
+def save_gradient_data(data):
+    import numpy as np
+    f = open("./gradient_data.txt",'a')
     data = data.detach().cpu().numpy()
     np.savetxt(f, data)
     f.close()

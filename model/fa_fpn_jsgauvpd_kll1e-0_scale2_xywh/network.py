@@ -9,7 +9,7 @@ from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.fa_anchor_target import fa_anchor_target
-from det_oprs.bbox_opr import bbox_transform_inv_opr
+from det_oprs.bbox_opr import bbox_transform_inv_opr, bbox_transform_opr, box_overlap_opr
 from det_oprs.loss_opr import js_gaussian_loss
 from det_oprs.my_loss_opr import freeanchor_vpd_loss_sml
 from det_oprs.utils import get_padded_tensor
@@ -42,7 +42,7 @@ class Network(nn.Module):
             #pred_bbox = union_inference(
             #        anchors_list, pred_cls_list, pred_reg_list, im_info)
             pred_bbox = per_layer_inference(
-                    anchors_list, pred_cls_list, pred_reg_list, im_info)
+                    anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info)
             return pred_bbox.cpu().detach()
 
     def inference(self, image, im_info, epoch=None, gt_boxes=None):
@@ -171,7 +171,7 @@ class RetinaNet_Head(nn.Module):
             for _ in pred_reg]
         return pred_cls_list, pred_reg_list
 
-def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
+def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info):
     keep_anchors = []
     keep_cls = []
     keep_reg = []
@@ -207,8 +207,13 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         keep_reg = keep_reg + 0.05 * torch.randn_like(keep_reg)
     pred_bbox = restore_bbox(keep_anchors, keep_reg, False)
     pred_bbox = pred_bbox.repeat(1, class_num).reshape(-1, 4)
-    if config.save_data or config.test_nms_method == 'kl_nms':
-        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_lstd], axis=1)
+    if config.save_data:
+        pred_gtboxes = gt_boxes[0, :int(im_info[0, 5]), :4].type_as(pred_bbox)
+        pred_iou = box_overlap_opr(keep_anchors, pred_gtboxes)
+        _, gt_assignment = pred_iou.topk(1, dim=1, sorted=True)
+        pred_gtboxes = pred_gtboxes[gt_assignment.reshape(-1), :]
+        keep_target = bbox_transform_opr(keep_anchors, pred_gtboxes)
+        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_reg, keep_target], axis=1)
     else:
         pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
     return pred_bbox
