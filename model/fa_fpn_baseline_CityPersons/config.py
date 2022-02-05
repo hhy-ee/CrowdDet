@@ -43,14 +43,14 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    train_batch_per_gpu = 4
+    train_batch_per_gpu = 8
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 3.125e-4 / 2
+    base_lr = 3.125e-4
     focal_loss_alpha = 0.25
     focal_loss_gamma = 2
 
-    warm_iter = 800
+    warm_iter = 1600
     max_epoch = 60
     lr_decay = [54, 57]
     nr_images_epoch = 2778
