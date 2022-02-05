@@ -178,6 +178,14 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
+            if pred_boxes.shape[0]>100:
+                pred_boxes = pred_boxes[:100, :6]
+        elif config.test_nms_method == 'kl_nms' and not config.save_data:
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
+            keep = pred_boxes[:, 4] > config.pred_cls_threshold
+            pred_boxes = pred_boxes[keep]
+            keep = nms_utils.kl_cpu_nms(pred_boxes, config.test_nms)
+            pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'normal_nms' and config.save_data:
             pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))

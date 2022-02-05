@@ -127,7 +127,7 @@ def cpu_nms(dets, base_thr):
         order = order[inds + 1]
     return np.array(keep)
 
-def cpu_kl_nms(dets, base_thr):
+def kl_cpu_nms(dets, base_thr):
     """Pure Python NMS baseline."""
     x1 = dets[:, 0]
     y1 = dets[:, 1]
