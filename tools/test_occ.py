@@ -55,22 +55,20 @@ def eval_all(args, config, network):
     pbar.close()
     for p in procs:
         p.join()
-    fpath = os.path.join(evalDir, 'dump-{}-{}.json'.format(args.occlusion, args.resume_weights))
+    fpath = os.path.join(evalDir, 'dump-{}-{}.json'.format('occ', args.resume_weights))
     misc_utils.save_json_lines(all_results, fpath)
     # evaluation
-    eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format(args.occlusion, args.resume_weights))
+    eval_path = os.path.join(evalDir, 'eval-{}-{}.json'.format('occ', args.resume_weights))
     eval_fid = open(eval_path,'w')
     # res_line, JI = compute_JI.evaluation_all(fpath, 'box')
     # for line in res_line:
     #     eval_fid.write(line+'\n')
-    if args.occlusion == 'Bare':
-        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=3)
-    elif args.occlusion == 'Partial':
-        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=4)
-    elif args.occlusion == 'Heavy':
-        AP, MR = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=5)
+    AP1, MR1 = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=3)
+    AP2, MR2 = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=4)
+    AP3, MR3 = compute_APMR.compute_APMR(fpath, config.eval_source, 'box', mode=5)
     # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
-    line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
+    line = 'Bare: AP:{:.4f}, MR:{:.4f}, Partial: AP:{:.4f}, MR:{:.4f}, Heavy: AP:{:.4f}, MR:{:.4f} '.\
+        format(AP1, MR1, AP2, MR2, AP3, MR3)
     print(line)
     eval_fid.write(line+'\n')
     eval_fid.close()
