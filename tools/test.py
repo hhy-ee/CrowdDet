@@ -3,7 +3,7 @@ import os
 import sys
 import math
 import argparse
-
+import json
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -72,7 +72,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(56, int(args.resume_weights)+1):
+    for epoch_id in range(30, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -145,8 +145,9 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
     dataset.records = dataset.records[start:end]
     data_iter = torch.utils.data.DataLoader(dataset=dataset, shuffle=False)
     # inference
+    save_data = []
     for (image, gt_boxes, im_info, ID) in data_iter:
-        pred_boxes = net(image.cuda(device), im_info.cuda(device), gt_boxes=gt_boxes)
+        pred_boxes = net(image.cuda(device), im_info.cuda(device), gt_boxes=gt_boxes, id = ID)
         scale = im_info[0, 2]
         if config.test_nms_method == 'set_nms':
             assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
@@ -179,20 +180,16 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'normal_nms' and config.save_data:
-            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
-            keep = pred_boxes[:, 4] > config.visulize_threshold
+            save_data.append(pred_boxes[1])
+            pred_boxes = pred_boxes[0].reshape(-1, pred_boxes[0].size(1))
+            keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
-            bboxes_pred = pred_boxes[:, 6:10]
-            target_pred = pred_boxes[:, 10:14]
-            # xy[0,1] xw[0,2] wh[2,3] yh[1,3]
-            target_x = target_pred[:, 0]
-            target_y = target_pred[:, 1]
-            idx = torch.where((torch.abs(target_x) > 0.4) * (torch.abs(target_x) < 0.8) * \
-                 (torch.abs(target_y) > 0.4) * (torch.abs(target_y) < 0.8))[0]
-            save_gradient_data((bboxes_pred - target_pred)[idx][:, :2])
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
+            if len(save_data) == 100:
+                with open('./outputs/target_keep.json', 'w') as f:
+                    json.dump(save_data, f)
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
             pred_boxes = pred_boxes.reshape(-1, 6)
@@ -257,7 +254,7 @@ def run_test():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
-    #                           '--resume_weights', '30'])
+    #                               '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
