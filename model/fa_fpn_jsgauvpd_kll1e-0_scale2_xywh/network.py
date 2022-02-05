@@ -1,4 +1,5 @@
 import math
+import json
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -44,12 +45,8 @@ class Network(nn.Module):
             pred_bbox = per_layer_inference(
                     anchors_list, pred_cls_list, pred_reg_list, im_info)
             if config.save_data:
-                save_datas = {}
-                pred_bbox, save_data = per_layer_savedata(
-                        anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info)
-                save_datas['ID'] = id[0]
-                save_datas['vis_keep'] = save_data[0].cpu().detach().tolist()
-                return pred_bbox.cpu().detach(), save_datas
+                per_layer_savebbox(
+                        anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info, id)
             return pred_bbox.cpu().detach()
 
     def inference(self, image, im_info, epoch=None, gt_boxes=None):
@@ -217,7 +214,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
     return pred_bbox
 
-def per_layer_savedata(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info):
+def per_layer_savekeep(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info, id):
     keep_anchors = []
     keep_cls = []
     keep_reg = []
@@ -277,11 +274,16 @@ def per_layer_savedata(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_
     keep_gtbox = pred_gtboxes[keep.reshape(-1)]
     keep_inds = keep_inds[keep.reshape(-1)]
     # get idx for the last epoch
+    save_data = {}
     normalize_target = target_normalize(keep_anchors, keep_gtbox, 'xy')
     normalize_bbox = target_normalize(keep_bboxes, keep_gtbox, 'xy')
     vis_keep = torch.where((normalize_target[:, 0] > 0.5) * (normalize_target[:, 1] > 0.5))
-    # get target for all epoch
-    return pred_bbox, vis_keep
+    save_data['ID'] = id[0]
+    save_data['vis_keep'] = keep_inds[vis_keep].cpu().detach().tolist()
+    save_data['keep_box'] = keep_gtbox[vis_keep].cpu().detach().tolist()
+    f = open('./outputs/target_keep.json', 'a')
+    json.dump(save_data, f)
+    f.close()
 
 def target_normalize(bbox, gt, mode):
     gt_w = gt[:, 2] - gt[:, 0]
@@ -297,6 +299,25 @@ def target_normalize(bbox, gt, mode):
     if mode == 'xy':
         nm_target = torch.cat([box_x.reshape(-1,1), box_y.reshape(-1,1)], dim=1)
     return nm_target
+
+def per_layer_savebbox(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info, id):
+    anchors = torch.cat(anchors_list, axis = 0)
+    reg = torch.cat(pred_reg_list, axis = 1).reshape(-1, 8)[:, :4]
+    # vis_keep
+    f = open('./outputs/target_keep.json', 'r')
+    lines = f.readline()
+    f.close()
+    img_info = [json.loads('{' + line) for line in lines.split('{')[1:]]
+    vis_keep = [info['vis_keep'] for info in img_info if info['ID'] == id[0]]
+    gts_keep = np.array([info['keep_box'] for info in img_info if info['ID'] == id[0]])[0]
+    if gts_keep.shape[0] != 0:
+        keep_bboxes = restore_bbox(anchors[vis_keep], reg[vis_keep], False)
+        keep_gtbox = torch.tensor(gts_keep).type_as(keep_bboxes)
+        normalize_bbox = target_normalize(keep_bboxes, keep_gtbox, 'xy')
+        f = open("./normalize_bbox.txt",'a')
+        data = normalize_bbox.detach().cpu().numpy()
+        np.savetxt(f, data)
+        f.close()
 
 def union_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     anchors = torch.cat(anchors_list, axis = 0)

@@ -3,7 +3,7 @@ import os
 import sys
 import math
 import argparse
-import json
+
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -180,16 +180,12 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'normal_nms' and config.save_data:
-            save_data.append(pred_boxes[1])
-            pred_boxes = pred_boxes[0].reshape(-1, pred_boxes[0].size(1))
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
-            if len(save_data) == 100:
-                with open('./outputs/target_keep.json', 'w') as f:
-                    json.dump(save_data, f)
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
             pred_boxes = pred_boxes.reshape(-1, 6)
