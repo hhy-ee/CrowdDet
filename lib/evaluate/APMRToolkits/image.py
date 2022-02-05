@@ -79,7 +79,9 @@ class Image(object):
     def occ_division(self, gtboxes, visboxes, occ_level):
         if gtboxes.shape[0] != 0:
             gtNum = (gtboxes[:, -1] == 1).sum()
-            occ = 1 - np.diag(self.box_overlap_opr(gtboxes[:gtNum], visboxes[:gtNum], True))
+            gt_area = (gtboxes[:gtNum, 2] - gtboxes[:gtNum, 0]) * (gtboxes[:gtNum, 3] - gtboxes[:gtNum, 1])
+            box_area = (visboxes[:gtNum, 2] - visboxes[:gtNum, 0]) * (visboxes[:gtNum, 3] - visboxes[:gtNum, 1])
+            occ = 1 - box_area / gt_area
             for i in range(gtNum):
                 gtboxes[i, -1] = 1 if (occ[i] >= occ_level[0]) and (occ[i] <= occ_level[1]) else -1 
             return gtboxes

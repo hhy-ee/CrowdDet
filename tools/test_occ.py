@@ -249,8 +249,7 @@ def run_test():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
-    #                           '--resume_weights', '30',
-    #                           '--occlusion', 'Bare'])
+    #                           '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
