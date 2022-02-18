@@ -1,6 +1,9 @@
 import numpy as np
 import pdb
 import torch
+from det_oprs.bbox_opr import bbox_transform_opr
+
+EPS = 1e-6
 
 def set_cpu_nms(dets, thresh):
     """Pure Python NMS baseline."""
@@ -127,62 +130,55 @@ def cpu_nms(dets, base_thr):
         order = order[inds + 1]
     return np.array(keep)
 
-def kl_cpu_nms(dets, base_thr):
+def cpu_js_nms(dets, config):
     """Pure Python NMS baseline."""
+    # JS nms
+    scores = dets[:, 4]
+    bboxes = dets[:, 0:4]
+    dists = dets[:, 6:14]
+    anchors = dets[:, 14:18]
+    order = np.argsort(-scores)
+    # normal nms
     x1 = dets[:, 0]
     y1 = dets[:, 1]
     x2 = dets[:, 2]
     y2 = dets[:, 3]
-    scores = dets[:, 4]
-    lstd = dets[:, 6:8].mean(1)
-    scores = scores * (1 - lstd.sigmoid())
     areas = (x2 - x1) * (y2 - y1)
-    order = np.argsort(-scores)
 
     keep = []
-    real_keep = []
+    real_boxes = bboxes.new_full((0, 4), 0, dtype=torch.float32)
     eps = 1e-8
     while len(order) > 0:
         i = order[0]
-
-        # kl_nms before normalnms
-        # xx1 = np.maximum(x1[i], x1[order])
-        # yy1 = np.maximum(y1[i], y1[order])
-        # xx2 = np.minimum(x2[i], x2[order])
-        # yy2 = np.minimum(y2[i], y2[order])
-
-        # w = np.maximum(0.0, xx2 - xx1)
-        # h = np.maximum(0.0, yy2 - yy1)
-        # inter = w * h
-        # ovr = inter / (areas[i] + areas[order] - inter + eps)
-        # candidate_inds = np.where(ovr >= 0.9)[0]
-        # candidate_lstd = lstd[order[candidate_inds]]
-        # i = order[candidate_inds[np.argmin(candidate_lstd)]]
+        keep.append(i)
+        
+        # JS nms
+        # nms_target = bbox_transform_opr(anchors[order[1:]], bboxes[i].reshape(1,-1))
+        # nms_dist = dists[order[1:]]
+        # jsd = js_gaussian_div(nms_dist, nms_target, config)
 
         # normal nms
-        keep.append(i)
-        xx1 = np.maximum(x1[i], x1[order[1:]])
-        yy1 = np.maximum(y1[i], y1[order[1:]])
-        xx2 = np.minimum(x2[i], x2[order[1:]])
-        yy2 = np.minimum(y2[i], y2[order[1:]])
-
+        xx1 = np.maximum(x1[i], x1[order])
+        yy1 = np.maximum(y1[i], y1[order])
+        xx2 = np.minimum(x2[i], x2[order])
+        yy2 = np.minimum(y2[i], y2[order])
         w = np.maximum(0.0, xx2 - xx1)
         h = np.maximum(0.0, yy2 - yy1)
         inter = w * h
-        ovr = inter / (areas[i] + areas[order[1:]] - inter + eps)
-
-        inds = np.where(ovr <= base_thr)[0]
-        supp_inds = np.where(ovr > base_thr)[0]
-        order = order[inds + 1]
-
-        # ambi_inds = np.where((ovr <= base_thr) * (ovr > base_thr - 0.1))[0]
-        # ambi_order = order[ambi_inds + 1]
-        # supp_order = order[supp_inds + 1]
-        # if ambi_order.shape[0] != 0 and supp_order.shape[0] != 0:    
-        #     exsupp_idx = np.where(lstd[ambi_order] < lstd[supp_order].mean())[0]
-        #     order = np.where(order == ambi_order[exsupp_idx])
-            
-    return np.array(keep)
+        ovr = inter / (areas[i] + areas[order] - inter + eps)
+        inds = np.where(ovr <= config.test_nms)[0]
+        # var voting
+        supp_inds = np.where(ovr > config.test_nms)[0]
+        supp_iou = ovr[supp_inds]
+        supp_inds = order[supp_inds]
+        supp_boxes = bboxes[supp_inds]
+        supp_var = dists[supp_inds, 4:].exp().pow(2)
+        supp_weights = torch.exp((1 - supp_iou).pow(2).mul(-1)).\
+            reshape(-1, 1) / supp_var
+        real_box = supp_boxes.mul(supp_weights).sum(dim=0) / supp_weights.sum(dim=0)
+        real_boxes = torch.cat([real_boxes, real_box.reshape(1, -1)], dim=0)
+        order = order[inds]
+    return np.array(keep), real_boxes
 
 def rpn_kl_nms(pred_box, box_lstd, box_scr, base_thr):
     """Pure Python NMS baseline."""
@@ -263,6 +259,33 @@ def box_overlap_opr(box1, box2):
         torch.zeros(1, dtype=inter.dtype, device=inter.device),
     )
     return iou
+
+def js_gaussian_div(dist, target, config):
+    scale = (config.project.shape[1] - 1) / 2 / config.project[0,-1]
+    acc = 1 / scale / 2
+    target = (target.reshape(-1) + config.project[0,-1]) * scale
+    target = target.clamp(min=EPS, max=2 * config.project[0,-1] * scale-EPS)
+    idx_left = target.long()
+    idx_right = idx_left + 1
+    weight_left = idx_right.float() - target
+    weight_right = target - idx_left.float()
+    # target distribution
+    target_dist = weight_left.new_full((weight_left.shape[0], \
+        config.project.shape[1]), 0, dtype=torch.float32)
+    target_dist[torch.arange(target_dist.shape[0]), idx_left] = weight_left
+    target_dist[torch.arange(target_dist.shape[0]), idx_right] = weight_right
+    # predict distribution
+    mean= dist[:, :4].reshape(-1, 1)
+    lstd= dist[:, 4:].reshape(-1, 1)
+    Qg = torch.distributions.normal.Normal(mean, lstd.exp())
+    project = torch.tensor(config.project).type_as(mean).repeat(mean.shape[0],1)
+    pred_dist = Qg.cdf(project + acc) - Qg.cdf(project - acc)
+    # JS distance
+    total_dist = (target_dist + pred_dist) / 2
+    jsd1 = pred_dist * torch.log((pred_dist + EPS) / (total_dist + EPS))
+    jsd2 = target_dist * torch.log((target_dist + EPS) / (total_dist + EPS))
+    jsd = (jsd1 + jsd2).sum(dim=1) / 2
+    return jsd.reshape(-1, 4).mean(dim=1)
 
 def nms_for_plot(dets, base_thr):
     """Pure Python NMS baseline."""

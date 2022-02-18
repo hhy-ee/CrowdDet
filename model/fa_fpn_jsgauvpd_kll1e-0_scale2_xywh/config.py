@@ -59,7 +59,7 @@ class Config:
     # ----------test config---------- #
     test_layer_topk = 1000
     test_nms = 0.5
-    test_nms_method = 'kl_nms'
+    test_nms_method = 'js_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
