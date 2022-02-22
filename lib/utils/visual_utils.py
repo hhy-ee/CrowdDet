@@ -3,7 +3,7 @@ import json
 import numpy as np
 import cv2
 from scipy.stats import beta
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 color = {'green':(0,255,0),
         'blue':(255,165,0),

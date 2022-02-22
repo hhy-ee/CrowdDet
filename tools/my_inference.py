@@ -7,7 +7,7 @@ import cv2
 import torch
 import numpy as np
 from tqdm import tqdm
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 lib_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'lib')
 model_dir = os.path.join(os.path.abspath(__file__).split('tools')[0], 'model')
@@ -55,7 +55,7 @@ def inference(args, config, network):
         pred_boxes = net(resized_img, im_info).numpy()
         pred_boxes, supp_boxes, pred_boxes_before_nms = post_process(pred_boxes, config, im_info[0, 2])
         inf_result, gt_boxes, gt_matched = visual_utils.my_inference_result(
-                config.eval_source, img_path, pred_boxes, im_info)
+                config.train_source, img_path, pred_boxes, im_info)
         pred_tags = pred_boxes[:, 5].astype(np.int32).flatten()
         pred_tags_name = np.array(config.class_names)[pred_tags]
         visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_nms, inf_result, 
@@ -134,10 +134,10 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
             scr = pred_scr_list[j][0, :, :, 0].numpy()
             scr = cv2.resize(scr, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
             scrs += scr
-            if j ==3 or j ==4:
-                lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
-                lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
-                lstds += lstd
+            # if j ==3 or j ==4:
+            lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
+            lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+            lstds += lstd
         lstd_map, scr_map = None, None
         scr_map = cv2.normalize(scrs, scr_map, alpha=0, beta=255, \
             norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
