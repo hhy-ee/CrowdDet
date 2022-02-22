@@ -44,6 +44,29 @@ class Network(nn.Module):
                     anchors_list, pred_cls_list, pred_reg_list, im_info)
             return pred_bbox.cpu().detach()
 
+    def inference(self, image, im_info, epoch=None, gt_boxes=None):
+        # pre-processing the data
+        image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
+                torch.tensor(config.image_std[None, :, None, None]).type_as(image))
+        image = get_padded_tensor(image, 64)
+        # do inference
+        # stride: 128,64,32,16,8, p7->p3
+        fpn_fms = self.FPN(image)
+        pred_cls_list, pred_reg_list, pred_qls_list = self.R_Head.inference(fpn_fms)
+        num_levels = [fm.shape for fm in fpn_fms]
+        pred_scr_list = []
+        pred_qual_list = []
+        pred_dist_list = []
+        for i in range(len(num_levels)):
+            w,h = num_levels[i][2:4]
+            pred_scr = pred_cls_list[i].reshape(1, w, h, 1).sigmoid()
+            pred_dist = pred_reg_list[i].reshape(1, w, h, 8)
+            pred_qual = pred_qls_list[i].reshape(1, w, h, 1)
+            pred_scr_list.append(pred_scr.cpu().detach())
+            pred_dist_list.append(pred_dist.cpu().detach())
+            pred_qual_list.append(pred_qual.cpu().detach())
+        return pred_scr_list, pred_dist_list, pred_qual_list
+
 class RetinaNet_Anchor():
     def __init__(self):
         self.anchors_generator = AnchorGenerator(
@@ -204,6 +227,43 @@ class RetinaNet_Head(nn.Module):
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
             for _ in pred_reg]
         return pred_cls_list, pred_reg_list
+
+    def inference(self, features):
+        pred_cls = []
+        pred_qls = []
+        pred_reg = []
+        for feature in features:
+            cls_score = self.cls_score(self.cls_subnet(feature))
+            bbox_pred = self.bbox_pred(self.bbox_subnet(feature))
+            # refinement
+            if config.stat_mode == 'std':
+                stat = bbox_pred[:, 4:]
+            elif config.stat_mode == 'pdf':
+                N, _, H, W = bbox_pred.size()
+                mean = bbox_pred[:, :4].permute(0,2,3,1).reshape(-1, 1)
+                lstd = bbox_pred[:, 4:].permute(0,2,3,1).reshape(-1, 1)
+                q0 = torch.distributions.normal.Normal(mean, lstd.exp())
+                project = torch.tensor(config.project).type_as(bbox_pred)
+                prob = q0.log_prob(project.repeat(mean.shape[0], 1))
+                prob_topk, _ = prob.exp().topk(config.reg_topk, dim=1)
+                prob_topk = prob_topk.reshape(N, H, W, 4, 4) * config.acc
+                stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
+                stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+            quality_score = self.reg_conf(stat)
+            cls_score = cls_score.sigmoid() * quality_score
+            pred_cls.append(cls_score)
+            pred_qls.append(quality_score)
+            pred_reg.append(bbox_pred)
+        # reshape the predictions
+        assert pred_cls[0].dim() == 4
+        pred_cls_list = [
+            _.permute(0, 2, 3, 1).reshape(pred_cls[0].shape[0], -1, config.num_classes-1)
+            for _ in pred_cls]
+        pred_reg_list = [
+            _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
+            for _ in pred_reg]
+        pred_qls_list = [_.permute(0, 2, 3, 1) for _ in pred_qls]
+        return pred_cls_list, pred_reg_list, pred_qls_list
 
 def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     keep_anchors = []
