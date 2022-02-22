@@ -56,14 +56,17 @@ class Network(nn.Module):
         pred_cls_list, pred_reg_list, pred_qls_list = self.R_Head.inference(fpn_fms)
         num_levels = [fm.shape for fm in fpn_fms]
         pred_scr_list = []
+        pred_qual_list = []
         pred_dist_list = []
         for i in range(len(num_levels)):
             w,h = num_levels[i][2:4]
             pred_scr = pred_cls_list[i].reshape(1, w, h, 1).sigmoid()
             pred_dist = pred_reg_list[i].reshape(1, w, h, 8)
+            pred_qual = pred_qls_list[i].reshape(1, w, h, 1)
             pred_scr_list.append(pred_scr.cpu().detach())
             pred_dist_list.append(pred_dist.cpu().detach())
-        return pred_scr_list, pred_dist_list, pred_qls_list
+            pred_qual_list.append(pred_qual.cpu().detach())
+        return pred_scr_list, pred_dist_list, pred_qual_list
         
 class RetinaNet_Anchor():
     def __init__(self):
