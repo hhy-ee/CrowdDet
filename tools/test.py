@@ -72,7 +72,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(30, int(args.resume_weights)+1):
+    for epoch_id in range(26, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -259,9 +259,9 @@ def run_test():
     parser.add_argument('--devices', '-d', default='0', type=str)
     os.environ['NCCL_IB_DISABLE'] = '1'
 
-    # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'atss_fpn_baseline_full_CityPersons', 
-                                  '--resume_weights', '30'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['--model_dir', 'atss_fpn_baseline_full_CityPersons', 
+    #                               '--resume_weights', '30'])
 
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)

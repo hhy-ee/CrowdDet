@@ -22,7 +22,7 @@ class Network(nn.Module):
         self.R_Anchor = RetinaNet_Anchor()
         self.R_Criteria = RetinaNet_Criteria()
 
-    def forward(self, image, im_info, epoch=None, gt_boxes=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None, id=None):
         # pre-processing the data
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
