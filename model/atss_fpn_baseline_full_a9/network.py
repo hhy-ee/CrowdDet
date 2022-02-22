@@ -82,8 +82,8 @@ class RetinaNet_Criteria(nn.Module):
         anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
         ctn_target = centerness_target(anchor_target, bbox_target[fg_mask])
         # regression loss
-        loss_ctn = F.binary_cross_entropy_with_logits(all_pred_ctn[fg_mask], ctn_target) \
-            if fg_mask.sum() > 0 else torch.zeros([]).type_as(ctn_target)
+        loss_ctn = F.binary_cross_entropy_with_logits(
+                all_pred_ctn[fg_mask], ctn_target)
         loss_reg = giou_loss( 
                 all_pred_reg[fg_mask],
                 bbox_target[fg_mask],

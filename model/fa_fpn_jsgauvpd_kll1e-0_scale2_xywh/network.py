@@ -24,7 +24,7 @@ class Network(nn.Module):
         self.R_Anchor = RetinaNet_Anchor()
         self.R_Criteria = RetinaNet_Criteria()
 
-    def forward(self, image, im_info, epoch=None, gt_boxes=None, id = None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None, id=None):
         # pre-processing the data
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
@@ -179,13 +179,13 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     keep_anchors = []
     keep_cls = []
     keep_reg = []
-    keep_lstd = []
+    keep_dist = []
     class_num = pred_cls_list[0].shape[-1]
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
         pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
         pred_reg = pred_reg_list[l_id][0].reshape(-1, 8)[:, :4]
-        pred_lstd = pred_reg_list[l_id][0].reshape(-1, 8)[:, 4:]
+        pred_dist = pred_reg_list[l_id][0].reshape(-1, 8)[:, :]
         if len(anchors) > config.test_layer_topk:
             ruler = pred_cls.max(axis=1)[0]
             _, inds = ruler.topk(config.test_layer_topk, dim=0)
@@ -193,16 +193,16 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
             keep_anchors.append(anchors[inds])
             keep_cls.append(torch.sigmoid(pred_cls[inds]))
             keep_reg.append(pred_reg[inds])
-            keep_lstd.append(pred_lstd[inds])
+            keep_dist.append(pred_dist[inds])
         else:
             keep_anchors.append(anchors)
             keep_cls.append(torch.sigmoid(pred_cls))
             keep_reg.append(pred_reg)
-            keep_lstd.append(pred_lstd)
+            keep_dist.append(pred_dist)
     keep_anchors = torch.cat(keep_anchors, axis = 0)
     keep_cls = torch.cat(keep_cls, axis = 0)
     keep_reg = torch.cat(keep_reg, axis = 0)
-    keep_lstd = torch.cat(keep_lstd, axis = 0)
+    keep_dist = torch.cat(keep_dist, axis = 0)
     # multiclass
     tag = torch.arange(class_num).type_as(keep_cls)+1
     tag = tag.repeat(keep_cls.shape[0], 1).reshape(-1,1)
@@ -211,7 +211,10 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
         keep_reg = keep_reg + 0.05 * torch.randn_like(keep_reg)
     pred_bbox = restore_bbox(keep_anchors, keep_reg, False)
     pred_bbox = pred_bbox.repeat(1, class_num).reshape(-1, 4)
-    pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)
+    if config.test_nms_method == 'js_nms':
+        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, keep_dist, keep_anchors], axis=1)
+    else:
+        pred_bbox = torch.cat([pred_bbox, pred_scores, tag, ], axis=1)
     return pred_bbox
 
 def per_layer_savekeep(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info, id):
@@ -285,21 +288,6 @@ def per_layer_savekeep(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_
     json.dump(save_data, f)
     f.close()
 
-def target_normalize(bbox, gt, mode):
-    gt_w = gt[:, 2] - gt[:, 0]
-    gt_h = gt[:, 3] - gt[:, 1]
-    gt_x = (gt[:, 0] + gt[:, 2]) / 2
-    gt_y = (gt[:, 1] + gt[:, 3]) / 2
-    bbox[:, 0:4:2] = (bbox[:, 0:4:2] - gt_x.reshape(-1,1)) / gt_w.reshape(-1,1)
-    bbox[:, 1:4:2] = (bbox[:, 1:4:2] - gt_y.reshape(-1,1)) / gt_h.reshape(-1,1)
-    box_w = bbox[:, 2] - bbox[:, 0]
-    box_h = bbox[:, 3] - bbox[:, 1]
-    box_x = (bbox[:, 0] + bbox[:, 2]) / 2
-    box_y = (bbox[:, 1] + bbox[:, 3]) / 2
-    if mode == 'xy':
-        nm_target = torch.cat([box_x.reshape(-1,1), box_y.reshape(-1,1)], dim=1)
-    return nm_target
-
 def per_layer_savebbox(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_info, id):
     anchors = torch.cat(anchors_list, axis = 0)
     reg = torch.cat(pred_reg_list, axis = 1).reshape(-1, 8)[:, :4]
@@ -318,6 +306,21 @@ def per_layer_savebbox(anchors_list, pred_cls_list, pred_reg_list, gt_boxes, im_
         data = normalize_bbox.detach().cpu().numpy()
         np.savetxt(f, data)
         f.close()
+
+def target_normalize(bbox, gt, mode):
+    gt_w = gt[:, 2] - gt[:, 0]
+    gt_h = gt[:, 3] - gt[:, 1]
+    gt_x = (gt[:, 0] + gt[:, 2]) / 2
+    gt_y = (gt[:, 1] + gt[:, 3]) / 2
+    bbox[:, 0:4:2] = (bbox[:, 0:4:2] - gt_x.reshape(-1,1)) / gt_w.reshape(-1,1)
+    bbox[:, 1:4:2] = (bbox[:, 1:4:2] - gt_y.reshape(-1,1)) / gt_h.reshape(-1,1)
+    box_w = bbox[:, 2] - bbox[:, 0]
+    box_h = bbox[:, 3] - bbox[:, 1]
+    box_x = (bbox[:, 0] + bbox[:, 2]) / 2
+    box_y = (bbox[:, 1] + bbox[:, 3]) / 2
+    if mode == 'xy':
+        nm_target = torch.cat([box_x.reshape(-1,1), box_y.reshape(-1,1)], dim=1)
+    return nm_target
 
 def union_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     anchors = torch.cat(anchors_list, axis = 0)

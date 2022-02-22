@@ -15,7 +15,6 @@ sys.path.insert(0, model_dir)
 from data.CrowdHuman import CrowdHuman
 from data.CityPersons import CityPersons
 from utils import misc_utils, SGD_bias
-from test import eval_all_epoch
 
 class Train_config:
     # size
@@ -178,7 +177,7 @@ def run_train():
 
     args = parser.parse_args()
     # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_uniform_kll1e-0_xywh'])
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh'])
     
 
     # import libs

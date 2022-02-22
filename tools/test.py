@@ -3,7 +3,7 @@ import os
 import sys
 import math
 import argparse
-
+import json
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -72,7 +72,7 @@ def eval_all(args, config, network):
     eval_fid.close()
 
 def eval_all_epoch(args, config, network):
-    for epoch_id in range(30, int(args.resume_weights)+1):
+    for epoch_id in range(26, int(args.resume_weights)+1):
         # model_path
         saveDir = config.model_dir
         evalDir = config.eval_dir
@@ -147,7 +147,7 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
     # inference
     save_data = []
     for (image, gt_boxes, im_info, ID) in data_iter:
-        pred_boxes = net(image.cuda(device), im_info.cuda(device), gt_boxes=gt_boxes, id = ID)
+        pred_boxes = net(image.cuda(device), im_info.cuda(device), gt_boxes=gt_boxes, id=ID)
         scale = im_info[0, 2]
         if config.test_nms_method == 'set_nms':
             assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
@@ -178,13 +178,11 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
-            if pred_boxes.shape[0]>100:
-                pred_boxes = pred_boxes[:100, :6]
-        elif config.test_nms_method == 'kl_nms' and not config.save_data:
+        elif config.test_nms_method == 'js_nms' and not config.save_data:
             pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
-            keep = nms_utils.kl_cpu_nms(pred_boxes, config.test_nms)
+            keep = nms_utils.cpu_js_nms(pred_boxes, config)
             pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'normal_nms' and config.save_data:
@@ -194,6 +192,10 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
             pred_boxes = pred_boxes[:, :6]
+            if config.save_boxes:
+                save_boxes = pred_boxes[:, :5] if pred_boxes.shape[0] < 100 else pred_boxes[:100, :5]
+                save_data.append([save_boxes.numpy()])
+                # save_boxes_json(save_data)
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
             pred_boxes = pred_boxes.reshape(-1, 6)
@@ -227,7 +229,8 @@ def boxes_dump(boxes):
         result = [{'box':[round(i, 1) for i in box[:4].tolist()],
                    'score':round(float(box[4]), 5),
                    'tag':int(box[5]),
-                   'lstd':float(box[6:10].mean())} for box in boxes]
+                   'lstd':float(box[6:10].mean()),
+                   'proposal_num':int(box[10])} for box in boxes]
     elif boxes.shape[-1] == 8:
         result = [{'box':[round(i, 1) for i in box[:4].tolist()],
                    'score':round(float(box[4]), 5),
@@ -243,7 +246,7 @@ def boxes_dump(boxes):
                    'score':round(float(box[4]), 5),
                    'tag':int(box[5])} for box in boxes]
     elif boxes.shape[-1] == 5:
-        result = [{'box':[round(i, 1) for i in box[:4]],
+        result = [{'box':[round(i, 1) for i in box[:4].tolist()],
                    'tag':int(box[4])} for box in boxes]
     else:
         raise ValueError('Unknown box dim.')
@@ -257,7 +260,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
+    # args = parser.parse_args(['--model_dir', 'atss_fpn_baseline_full_CityPersons', 
     #                               '--resume_weights', '30'])
 
     # import libs
@@ -284,6 +287,23 @@ def save_gradient_data(data):
     f.close()
     return 0
 
+def save_boxes_json(outputs):
+    res = []
+    for id, boxes in enumerate(outputs):
+        boxes=boxes[0]
+        if type(boxes) == list:
+            boxes = boxes[0]
+        if len(boxes) > 0:
+            for box in boxes:
+                # box[:4] = box[:4] / 0.6
+                temp = dict()
+                temp['image_id'] = id+1
+                temp['category_id'] = 1
+                temp['bbox'] = box[:4].tolist()
+                temp['score'] = float(box[4])
+                res.append(temp)
+    with open('./result_citypersons.json', 'w') as f:
+        json.dump(res, f)
+
 if __name__ == '__main__':
     run_test()
-

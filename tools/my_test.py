@@ -17,6 +17,7 @@ sys.path.insert(0, lib_dir)
 sys.path.insert(0, model_dir)
 
 from data.CrowdHuman import CrowdHuman
+from data.CityPersons import CityPersons
 from utils import misc_utils, nms_utils
 from evaluate import compute_JI, compute_APMR
 
@@ -65,10 +66,6 @@ def eval_all(args, config, network):
     # for line in res_line:
     #     eval_fid.write(line+'\n')
     AP, MR, scorelist, pltscrlist = compute_APMR.compute_my_APMR(0, fpath, config.eval_source, 'box', len_dataset)
-    if config.save_data and 'set' not in config.test_nms_method:
-        save_data(scorelist, len_dataset)
-    elif config.save_data and 'set' in config.test_nms_method:
-        save_set_data(pltscrlist, len_dataset)
     # line = 'AP:{:.4f}, MR:{:.4f}, JI:{:.4f}.'.format(AP, MR, JI)
     line = 'AP:{:.4f}, MR:{:.4f}.'.format(AP, MR)
     print(line)
@@ -88,8 +85,9 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
     dataset.records = dataset.records[start:end]
     data_iter = torch.utils.data.DataLoader(dataset=dataset, shuffle=False)
     # inference
+    save_data = []
     for (image, gt_boxes, im_info, ID) in data_iter:
-        pred_boxes = net(image.cuda(device), im_info.cuda(device))
+        pred_boxes = net(image.cuda(device), im_info.cuda(device), gt_boxes=gt_boxes, id=ID)
         scale = im_info[0, 2]
         if config.test_nms_method == 'set_nms':
             assert pred_boxes.shape[-1] > 6, "Not EMD Network! Using normal_nms instead."
@@ -114,30 +112,29 @@ def inference(config, network, model_file, device, dataset, start, end, result_q
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.set_cpu_kl_nms(pred_boxes, 0.5)
             pred_boxes = pred_boxes[keep]
-        elif config.test_nms_method == 'normal_nms':
-            if not config.save_data:
-                assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
-                pred_boxes = pred_boxes.reshape(-1, 6)
-            else:
-                pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
+        elif config.test_nms_method == 'normal_nms' and not config.save_data:
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
             keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
             pred_boxes = pred_boxes[keep]
-            if config.save_data:
-                pred_scores = pred_boxes[:, 4].reshape(-1, 1)
-                pred_tags = pred_boxes[:, 5].reshape(-1, 1)
-                pred_lstd = pred_boxes[:, 6:]
-                save_data(pred_scores, pred_tags, pred_lstd)
-            pred_boxes = pred_boxes[:, :6]
-        elif config.test_nms_method == 'kl_nms':
+            if pred_boxes.shape[0]>100:
+                pred_boxes = pred_boxes[:100, :6]
+        elif config.test_nms_method == 'js_nms' and not config.save_data:
             pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
             keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
-            # keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
-            keep = nms_utils.cpu_kl_nms(pred_boxes, config.test_nms)
+            keep, real_boxes = nms_utils.cpu_js_nms(pred_boxes, config)
+            pred_boxes = torch.cat([real_boxes, pred_boxes[keep, 4:6]], dim=1)
+            # pred_boxes = pred_boxes[keep]
+            # pred_boxes = pred_boxes[:, :6]
+        elif config.test_nms_method == 'normal_nms' and config.save_data:
+            pred_boxes = pred_boxes.reshape(-1, pred_boxes.size(1))
+            keep = pred_boxes[:, 4] > config.pred_cls_threshold
             pred_boxes = pred_boxes[keep]
-            pred_boxes = pred_boxes[:, :8]
+            keep = nms_utils.cpu_nms(pred_boxes, config.test_nms)
+            pred_boxes = pred_boxes[keep]
+            pred_boxes = pred_boxes[:, :6]
         elif config.test_nms_method == 'none':
             assert pred_boxes.shape[-1] % 6 == 0, "Prediction dim Error!"
             pred_boxes = pred_boxes.reshape(-1, 6)
@@ -202,9 +199,7 @@ def run_test():
     os.environ['NCCL_IB_DISABLE'] = '1'
 
     # args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_vpd_kll1e-1_prior_p1_wh', 
-    #                           '--resume_weights', '38'])
-    args = parser.parse_args(['--model_dir', 'atss_fpn_jsgauvpd_kll5e-1_scale2_xywh', 
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh', 
                               '--resume_weights', '30'])
 
     # import libs
