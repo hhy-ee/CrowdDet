@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 import argparse
 
@@ -245,12 +245,12 @@ def run_inference():
     parser.add_argument('--img_name', '-na', default=None, required=False, type=str)
     parser.add_argument('--vis_mode', '-vi', default=None, required=False, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgau_kll1e-0_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
                                 '--img_num', '0-400',
-                                '--img_name', None,
-                                '--vis_mode', 'scatter_scr_std_after_nms'])
+                                '--img_name', '273275,c5d22000e47802ff',
+                                '--vis_mode', 'fpn_heatmap'])
     # import libs
     model_root_dir = os.path.join(model_dir, args.model_dir)
     sys.path.insert(0, model_root_dir)
