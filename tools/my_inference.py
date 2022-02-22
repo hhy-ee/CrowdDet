@@ -127,7 +127,11 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
         np.savetxt(f, data)
         f.close()
     if args.vis_mode == 'fpn_heatmap':
-        pred_scr_list, pred_dist_list = net.inference(resized_img, im_info)
+        pred_list = net.inference(resized_img, im_info)
+        if len(pred_list) == 2:
+            pred_scr_list, pred_dist_list = pred_list
+        elif len(pred_list) == 3:
+            pred_scr_list, pred_dist_list, pred_qls_list = pred_list
         scrs = np.zeros((image.shape[0], image.shape[1]))
         lstds = np.zeros((image.shape[0], image.shape[1]))
         for j in range(len(pred_scr_list)):
@@ -245,7 +249,7 @@ def run_inference():
     parser.add_argument('--img_name', '-na', default=None, required=False, type=str)
     parser.add_argument('--vis_mode', '-vi', default=None, required=False, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh_rstd',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
                                 '--img_num', '0-400',
