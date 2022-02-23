@@ -32,17 +32,17 @@ class Network(nn.Module):
         # stride: 128,64,32,16,8, p7->p3
         fpn_fms = self.FPN(image)
         anchors_list = self.R_Anchor(fpn_fms)
-        pred_cls_list, pred_reg_list = self.R_Head(fpn_fms)
+        pred_cls_list, pred_reg_list, pred_refined_cls_list = self.R_Head(fpn_fms)
         # release the useless data
         if self.training:
             loss_dict = self.R_Criteria(
-                    pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info)
+                    pred_cls_list, pred_reg_list, pred_refined_cls_list, anchors_list, gt_boxes, im_info)
             return loss_dict
         else:
             #pred_bbox = union_inference(
             #        anchors_list, pred_cls_list, pred_reg_list, im_info)
             pred_bbox = per_layer_inference(
-                    anchors_list, pred_cls_list, pred_reg_list, im_info)
+                    anchors_list, pred_cls_list, pred_reg_list, pred_refined_cls_list, im_info)
             return pred_bbox.cpu().detach()
 
     def inference(self, image, im_info, epoch=None, gt_boxes=None):
@@ -95,18 +95,28 @@ class RetinaNet_Criteria(nn.Module):
         self.loss_normalizer = 100 # initialize with any reasonable #fg that's not too small
         self.loss_normalizer_momentum = 0.9
 
-    def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info):
+    def __call__(self, pred_cls_list, pred_reg_list, pred_refined_cls_list, anchors_list, gt_boxes, im_info):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
         all_pred_dist = torch.cat(pred_reg_list, axis=1).reshape(-1, 8)
+        all_pred_refined_cls = torch.cat(pred_refined_cls_list, axis=1).reshape(-1, config.num_classes-1)
         # gaussian reparameterzation
         all_pred_mean = all_pred_dist[:, :4]
         all_pred_lstd = all_pred_dist[:, 4:]
         all_pred_reg = all_pred_mean + all_pred_lstd.exp() * torch.randn_like(all_pred_mean)
+        
         # freeanchor loss
-        loss_dict = freeanchor_vpd_loss_sml(
+        loss_dict = {}
+        loss_dict_orign = freeanchor_vpd_loss_sml(
             all_anchors, all_pred_cls, all_pred_mean, 
             all_pred_reg, gt_boxes, im_info)
+        loss_dict_refine = freeanchor_vpd_loss_sml(
+            all_anchors, all_pred_refined_cls, all_pred_mean, 
+            all_pred_reg, gt_boxes, im_info)
+        loss_dict['positive_bag_loss'] = (loss_dict_orign['positive_bag_loss'] + \
+            loss_dict_refine['positive_bag_loss']) * 0.5
+        loss_dict['negative_bag_loss'] = (loss_dict_refine['negative_bag_loss'] + \
+            loss_dict_refine['negative_bag_loss']) * 0.5
         # kl loss
         labels, bbox_target = fa_anchor_target(
             all_anchors, gt_boxes, im_info, top_k=config.pre_anchor_topk)
@@ -176,6 +186,7 @@ class RetinaNet_Head(nn.Module):
     def forward(self, features):
         pred_cls = []
         pred_reg = []
+        pred_refined_cls = []
         for feature in features:
             cls_score = self.cls_score(self.cls_subnet(feature))
             bbox_pred = self.bbox_pred(self.bbox_subnet(feature))
@@ -194,9 +205,10 @@ class RetinaNet_Head(nn.Module):
                 stat = torch.cat([prob_topk, prob_topk.mean(dim=4, keepdim=True)], dim=4)
                 stat = stat.reshape(N, H, W, -1).permute(0, 3, 1, 2)
             quality_score = self.reg_conf(stat)
-            cls_score = cls_score.sigmoid() * quality_score
-            pred_cls.append(cls_score)
+            refined_cls_score = cls_score.sigmoid() * quality_score
+            pred_cls.append(cls_score.sigmoid())
             pred_reg.append(bbox_pred)
+            pred_refined_cls.append(refined_cls_score)
         # reshape the predictions
         assert pred_cls[0].dim() == 4
         pred_cls_list = [
@@ -205,7 +217,10 @@ class RetinaNet_Head(nn.Module):
         pred_reg_list = [
             _.permute(0, 2, 3, 1).reshape(pred_reg[0].shape[0], -1, 8)
             for _ in pred_reg]
-        return pred_cls_list, pred_reg_list
+        pred_refined_cls_list = [
+            _.permute(0, 2, 3, 1).reshape(pred_refined_cls[0].shape[0], -1, config.num_classes-1)
+            for _ in pred_refined_cls]
+        return pred_cls_list, pred_reg_list, pred_refined_cls_list
     
     def inference(self, features):
         pred_rcls, pred_reg, pred_qls, pred_cls = [], [], [], []

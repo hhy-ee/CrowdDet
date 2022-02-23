@@ -132,9 +132,12 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
             pred_scr_list, pred_dist_list = pred_list
         elif len(pred_list) == 3:
             pred_scr_list, pred_dist_list, pred_qls_list = pred_list
+        elif len(pred_list) == 4:
+            pred_scr_list, pred_dist_list, pred_qls_list, pred_oscr_list = pred_list
         scrs = np.zeros((image.shape[0], image.shape[1]))
-        qlss = np.zeros((image.shape[0], image.shape[1]))
         lstds = np.zeros((image.shape[0], image.shape[1]))
+        qlss = np.zeros((image.shape[0], image.shape[1]))
+        oscrs = np.zeros((image.shape[0], image.shape[1]))
         for j in range(len(pred_scr_list)):
             scr = pred_scr_list[j][0, :, :, 0].numpy()
             scr = cv2.resize(scr, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
@@ -143,21 +146,28 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
             lstd = pred_dist_list[j][0, :, :, 4:].mean(dim=2).numpy()
             lstd = cv2.resize(lstd, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
             lstds += lstd
-            if len(pred_list) == 3:
+            if len(pred_list) >= 3:
                 qls = pred_qls_list[j][0, :, :, 0].numpy()
                 qls = cv2.resize(qls, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
                 qlss += qls
-        lstd_map, scr_map, qls_map = None, None, None
+                if len(pred_list) >= 4:
+                    oscr = pred_oscr_list[j][0, :, :, 0].numpy()
+                    oscr = cv2.resize(oscr, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+                    oscrs += oscr
+        lstd_map, scr_map, qls_map, oscr_map = None, None, None, None
         scr_map = cv2.normalize(scrs, scr_map, alpha=0, beta=255, \
             norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         lstd_map = cv2.normalize(lstds, lstd_map, alpha=0, beta=255, \
             norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         qls_map = cv2.normalize(qlss, qls_map, alpha=0, beta=255, \
             norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        oscr_map = cv2.normalize(oscrs, oscr_map, alpha=0, beta=255, \
+            norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         scr_map = cv2.applyColorMap(scr_map, cv2.COLORMAP_JET)
         lstd_map = cv2.applyColorMap(lstd_map, cv2.COLORMAP_JET)
         lstd_map = cv2.cvtColor(lstd_map, cv2.COLOR_BGR2RGB)
         qls_map = cv2.applyColorMap(qls_map, cv2.COLORMAP_BONE)
+        oscr_map = cv2.applyColorMap(oscr_map, cv2.COLORMAP_JET)
         name = img_path.split('/')[-1].split('.')[-2]
         fpath = 'outputs/{}.png'.format(name)
         cv2.imwrite(fpath, image)
@@ -167,6 +177,8 @@ def visualization(image, resized_img, pred_boxes, supp_boxes, pred_boxes_before_
         cv2.imwrite(fpath, lstd_map)
         fpath = 'outputs/{}_qlsmap.png'.format(name)
         cv2.imwrite(fpath, qls_map)
+        fpath = 'outputs/{}_oscrmap.png'.format(name)
+        cv2.imwrite(fpath, oscr_map)
     if args.vis_mode == 'each_fpn_heatmap':
         pred_scr_list, pred_dist_list = net.inference(resized_img, im_info)
         for j in range(len(pred_scr_list)):
@@ -259,7 +271,7 @@ def run_inference():
     parser.add_argument('--img_name', '-na', default=None, required=False, type=str)
     parser.add_argument('--vis_mode', '-vi', default=None, required=False, type=str)
     # args = parser.parse_args()
-    args = parser.parse_args(['--model_dir', 'retina_fpn_jsgauvpd_kll1e-0_scale2_xywh_rstd',
+    args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh_rstd',
                                 '--resume_weights', '30',
                                 '--img_path', './data/CrowdHuman/Images/',
                                 '--img_num', '0-400',
