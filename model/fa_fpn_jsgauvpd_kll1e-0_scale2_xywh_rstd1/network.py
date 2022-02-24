@@ -259,7 +259,7 @@ class RetinaNet_Head(nn.Module):
         pred_cls_list = [_.permute(0, 2, 3, 1) for _ in pred_cls]
         return pred_rcls_list, pred_reg_list, pred_qls_list, pred_cls_list
 
-def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
+def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_refined_cls_list, im_info):
     keep_anchors = []
     keep_cls = []
     keep_reg = []
@@ -267,7 +267,7 @@ def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, im_info):
     class_num = pred_cls_list[0].shape[-1]
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
-        pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
+        pred_cls = pred_refined_cls_list[l_id][0].reshape(-1, class_num)
         pred_reg = pred_reg_list[l_id][0].reshape(-1, 8)[:, :4]
         pred_lstd = pred_reg_list[l_id][0].reshape(-1, 8)[:, 4:]
         if len(anchors) > config.test_layer_topk:
