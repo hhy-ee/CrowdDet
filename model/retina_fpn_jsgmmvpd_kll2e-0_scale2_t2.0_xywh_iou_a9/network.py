@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, js_gmm_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, js_gmm_loss, iou_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -89,10 +89,11 @@ class RetinaNet_Criteria(nn.Module):
         pos_pred_delta = project_mean + pos_pred_lstd.exp() * torch.randn_like(project_mean)
         pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
         # regression loss
-        loss_reg = smooth_l1_loss(
+        anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
+        loss_reg = iou_loss(
                 pos_pred_delta,
                 bbox_target[fg_mask],
-                config.smooth_l1_beta)
+                anchor_target)
         loss_cls = focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
