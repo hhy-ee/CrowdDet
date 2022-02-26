@@ -75,7 +75,7 @@ class RetinaNet_Criteria(nn.Module):
         all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4)
         # get ground truth
-        loss_dict = freeanchor_loss_sml(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
+        loss_dict = freeanchor_loss_sml_ign(all_anchors, all_pred_cls, all_pred_reg, gt_boxes, im_info)
         return loss_dict
 
 class RetinaNet_Head(nn.Module):

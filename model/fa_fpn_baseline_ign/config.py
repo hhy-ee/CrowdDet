@@ -87,5 +87,6 @@ class Config:
     pre_anchor_topk = 50
     loss_box_alpha = 0.5
     loss_box_gamma = 2.0
+    ignore_ioa_thr = 0.5
 
 config = Config()

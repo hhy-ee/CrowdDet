@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from det_oprs.loss_opr import smooth_l1_loss
 from det_oprs.bbox_opr import bbox_transform_inv_opr, bbox_transform_opr
-from det_oprs.bbox_opr import box_overlap_opr, box_giou_opr, box_iog_opr, align_box_giou_opr
+from det_oprs.bbox_opr import box_overlap_opr, box_giou_opr, box_iog_opr, box_ioa_opr, align_box_giou_opr
 from config import config
 
 EPS = 1e-12
@@ -100,24 +100,29 @@ def freeanchor_loss_sml(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
     return losses
 
 def freeanchor_loss_sml_ign(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
-    gt_labels, gt_bboxes = [], []
+    gt_labels, gt_bboxes, gt_bboxes_ign = [], [], []
     cls_prob = cls_prob.reshape(config.train_batch_per_gpu, -1, config.num_classes-1)
     bbox_preds = bbox_preds.reshape(config.train_batch_per_gpu, -1, 4)
     gt_boxes = [gt_boxes[bid, :int(im_info[bid, 5]), :] for bid in range(config.train_batch_per_gpu)]
-    gt_boxes_ignore = [gt_boxes[bid, int(im_info[bid, 5]):, :] for bid in range(config.train_batch_per_gpu)]
     for gt_box in gt_boxes:
-        obj_mask = torch.where(gt_box[:, -1] == 1)[0] 
+        obj_mask = torch.where(gt_box[:, -1] == 1)[0]
+        ign_mask = torch.where(gt_box[:, -1] == -1)[0]
         gt_labels.append(torch.zeros_like(gt_box[obj_mask, -1]).long())
         gt_bboxes.append(gt_box[obj_mask, :4])
+        gt_bboxes_ign.append(gt_box[ign_mask, :4])
     box_prob = []
     num_pos = 0
     positive_losses = []
-    for _, (gt_labels_, gt_bboxes_, cls_prob_, bbox_preds_) in \
-                        enumerate(zip(gt_labels, gt_bboxes, cls_prob, bbox_preds)):
+    for _, (gt_labels_, gt_bboxes_, gt_bboxes_ign_, cls_prob_, bbox_preds_) in \
+                        enumerate(zip(gt_labels, gt_bboxes, gt_bboxes_ign, cls_prob, bbox_preds)):
         with torch.no_grad():
             if len(gt_bboxes_) == 0:
                 image_box_prob = torch.zeros(anchors.size(0), config.num_classes-1).type_as(bbox_preds_)
             else:
+                if gt_bboxes_ign_.shape[0] != 0:
+                    ignore_overlaps = box_ioa_opr(anchors, gt_bboxes_ign_)
+                    ignore_max_overlaps, _ = ignore_overlaps.max(dim=1)
+                    ignore_idxs = ignore_max_overlaps > config.ignore_ioa_thr
                 # box_localization: a_{j}^{loc}, shape: [j, 4]
                 pred_boxes = bbox_transform_inv_opr(anchors, bbox_preds_)
 
@@ -148,9 +153,13 @@ def freeanchor_loss_sml_ign(anchors, cls_prob, bbox_preds, gt_boxes, im_info):
                                         indices.flip([0]),
                                         nonzero_box_prob,
                                         size=(anchors.size(0), config.num_classes-1)).to_dense()
+                    if gt_bboxes_ign_.shape[0] != 0:
+                            image_box_prob[ignore_idxs] = 0
             box_prob.append(image_box_prob)
         # construct bags for objects
         match_quality_matrix = box_overlap_opr(gt_bboxes_, anchors)
+        if gt_bboxes_ign_.shape[0] != 0:
+            match_quality_matrix[:, ignore_idxs] = -1
         _, matched = torch.topk(match_quality_matrix, config.pre_anchor_topk, dim=1, sorted=False)
         del match_quality_matrix
 
