@@ -232,14 +232,14 @@ class RetinaNet_Head(nn.Module):
             for _ in pred_refined_cls]
         return pred_cls_list, pred_reg_list, pred_ctn_list, pred_refined_cls_list
 
-def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_list, im_info):
+def per_layer_inference(anchors_list, pred_cls_list, pred_reg_list, pred_ctn_list, pred_refined_cls_list, im_info):
     keep_anchors = []
     keep_scr = []
     keep_reg = []
     class_num = pred_cls_list[0].shape[-1]
     for l_id in range(len(anchors_list)):
         anchors = anchors_list[l_id].reshape(-1, 4)
-        pred_cls = pred_cls_list[l_id][0].reshape(-1, class_num)
+        pred_cls = pred_refined_cls_list[l_id][0].reshape(-1, class_num)
         pred_reg = pred_reg_list[l_id][0].reshape(-1, 8)[:, :4]
         pred_ctn = pred_ctn_list[l_id][0].reshape(-1, 1)
         pred_scr = pred_cls * torch.sigmoid(pred_ctn)
