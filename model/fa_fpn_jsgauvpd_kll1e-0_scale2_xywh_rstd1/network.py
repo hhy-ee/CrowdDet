@@ -115,7 +115,7 @@ class RetinaNet_Criteria(nn.Module):
             all_pred_reg, gt_boxes, im_info)
         loss_dict['positive_bag_loss'] = (loss_dict_orign['positive_bag_loss'] + \
             loss_dict_refine['positive_bag_loss']) * 0.5
-        loss_dict['negative_bag_loss'] = (loss_dict_refine['negative_bag_loss'] + \
+        loss_dict['negative_bag_loss'] = (loss_dict_orign['negative_bag_loss'] + \
             loss_dict_refine['negative_bag_loss']) * 0.5
         # kl loss
         labels, bbox_target = fa_anchor_target(
