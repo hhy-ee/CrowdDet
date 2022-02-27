@@ -87,4 +87,6 @@ class Config:
     gumbel_temperature = 2.0
     project = np.linspace(-1, 1, 21)[None, :]
     component = np.linspace(-1, 1, 21)[None, :]
+    stat_mode = 'std'
+
 config = Config()

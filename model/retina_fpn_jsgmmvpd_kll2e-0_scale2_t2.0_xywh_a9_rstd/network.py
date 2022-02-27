@@ -10,7 +10,7 @@ from backbone.fpn import FPN
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.retina_anchor_target import retina_anchor_target
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.loss_opr import focal_loss, smooth_l1_loss, js_gmm_loss, iou_loss
+from det_oprs.loss_opr import focal_loss, smooth_l1_loss, js_gmm_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -71,7 +71,6 @@ class RetinaNet_Criteria(nn.Module):
     def __call__(self, pred_cls_list, pred_reg_list, anchors_list, gt_boxes, im_info):
         all_anchors = torch.cat(anchors_list, axis=0)
         all_pred_cls = torch.cat(pred_cls_list, axis=1).reshape(-1, config.num_classes-1)
-        all_pred_cls = torch.sigmoid(all_pred_cls)
         all_pred_reg = torch.cat(pred_reg_list, axis=1).reshape(-1, 4, 2 * config.project.shape[1])
         # get ground truth
         labels, bbox_target = retina_anchor_target(all_anchors, gt_boxes, im_info, top_k=1)
@@ -89,11 +88,10 @@ class RetinaNet_Criteria(nn.Module):
         pos_pred_delta = project_mean + pos_pred_lstd.exp() * torch.randn_like(project_mean)
         pos_pred_delta = gumbel_weight.mul(pos_pred_delta).sum(dim=1).reshape(-1, 4)
         # regression loss
-        anchor_target = all_anchors.repeat(config.train_batch_per_gpu, 1)[fg_mask]
-        loss_reg = iou_loss(
+        loss_reg = smooth_l1_loss(
                 pos_pred_delta,
                 bbox_target[fg_mask],
-                anchor_target)
+                config.smooth_l1_beta)
         loss_cls = focal_loss(
                 all_pred_cls[valid_mask],
                 labels[valid_mask],
@@ -123,6 +121,9 @@ class RetinaNet_Head(nn.Module):
         super().__init__()
         num_convs = 4
         in_channels = 256
+        reg_channels = 64
+        if config.stat_mode == 'std':
+            ref_channels = 4
         cls_subnet = []
         bbox_subnet = []
         for _ in range(num_convs):
@@ -144,6 +145,12 @@ class RetinaNet_Head(nn.Module):
             in_channels, config.num_cell_anchors * 4 * 2 * config.project.shape[1],
             kernel_size=3, stride=1, padding=1)
 
+        # refinement
+        conf_vector = [nn.Conv2d(ref_channels, reg_channels, 1)]
+        conf_vector += [nn.ReLU(inplace=True)]
+        conf_vector += [nn.Conv2d(reg_channels, 1, 1), nn.Sigmoid()]
+        self.reg_conf = nn.Sequential(*conf_vector)
+
         # Initialization
         for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, 
                         self.bbox_pred]:
@@ -160,8 +167,20 @@ class RetinaNet_Head(nn.Module):
         pred_cls = []
         pred_reg = []
         for feature in features:
-            pred_cls.append(self.cls_score(self.cls_subnet(feature)))
-            pred_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+            cls_score = self.cls_score(self.cls_subnet(feature))
+            bbox_pred = self.bbox_pred(self.bbox_subnet(feature))
+            N, _, H, W = bbox_pred.size()
+            n_component = config.component.shape[1]
+            logit = bbox_pred.permute(0,2,3,1).reshape(-1, n_component*2)[:, :n_component]
+            lstd = bbox_pred.permute(0,2,3,1).reshape(-1, n_component*2)[:, n_component:]
+            _, idx = logit.topk(1, dim=1)
+            top_lstd = torch.gather(lstd, dim=1, index=idx).reshape(N, H, W, -1).permute(0, 3, 1, 2)
+            if config.stat_mode == 'std':
+                stat = top_lstd.reshape(-1, 4, H, W)
+                quality_score = self.reg_conf(stat).reshape(N, -1, H, W)
+            cls_score = cls_score.sigmoid() * quality_score
+            pred_cls.append(cls_score)
+            pred_reg.append(bbox_pred)
         # reshape the predictions
         assert pred_cls[0].dim() == 4
         pred_cls_list = [
