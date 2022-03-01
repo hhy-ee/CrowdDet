@@ -43,7 +43,7 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    train_batch_per_gpu = 4
+    train_batch_per_gpu = 2
     momentum = 0.9
     weight_decay = 1e-4
     base_lr = 3.125e-4
@@ -90,6 +90,7 @@ class Config:
     loss_box_gamma = 2.0
     kl_weight = 1.0
     gumbel_temperature = 1.0
-    project = np.linspace(-1, 1, 11)[None, :]
-    
+    project = np.linspace(-1, 1, 21)[None, :]
+    component = np.linspace(-1, 1, 21)[None, :]
+    stat_mode = 'std'
 config = Config()
