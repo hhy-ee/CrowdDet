@@ -11,12 +11,12 @@ root_dir = os.path.dirname(__file__).split('model')[0]
 model_dir = os.path.dirname(__file__)
 
 class Crowd_human:
-    class_names = ['background', 'person']
+    class_names = ['background', 'pedestrian']
     num_classes = len(class_names)
-    root_folder = os.path.join(root_dir, 'data/CrowdHuman')
-    image_folder = os.path.join(root_dir, 'data/CrowdHuman/Images')
-    train_source = os.path.join(root_dir, 'data/CrowdHuman/annotation_train.odgt')
-    eval_source = os.path.join(root_dir, 'data/CrowdHuman/annotation_val.odgt')
+    root_folder = os.path.join(root_dir, 'data/CityPersons')
+    image_folder = os.path.join(root_dir, 'data/CityPersons/leftImg8bit/train')
+    train_source = os.path.join(root_dir, 'data/CityPersons/train.json')
+    eval_source = os.path.join(root_dir, 'data/CityPersons/val_gt.json')
 
 class Config:
     output_dir = os.path.join(model_dir, 'outputs')
@@ -43,7 +43,7 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    train_batch_per_gpu = 4
+    train_batch_per_gpu = 2
     momentum = 0.9
     weight_decay = 1e-4
     base_lr = 3.125e-4
@@ -53,7 +53,7 @@ class Config:
     warm_iter = 800
     max_epoch = 30
     lr_decay = [24, 27]
-    nr_images_epoch = 15000
+    nr_images_epoch = 2778
     log_dump_interval = 20
 
     # ----------test config---------- #
@@ -82,11 +82,11 @@ class Config:
     allow_low_quality = True
     save_data = False
 
-    # -------------atss-config --------------------#
-    ignore_ioa_thr = 0.5
-    assign_topk = 9
-    kl_weight = 1.0
-    gumbel_temperature = 1.0
+    # ----------freeanchor config---------- #
+    kl_weight = 2.0
+    gumbel_temperature = 2.0
     project = np.linspace(-1, 1, 21)[None, :]
+    component = np.linspace(-1, 1, 21)[None, :]
+    stat_mode = 'std'
 
 config = Config()

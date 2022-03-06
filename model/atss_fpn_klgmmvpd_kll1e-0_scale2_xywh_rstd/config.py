@@ -69,10 +69,10 @@ class Config:
 
     # --------anchor generator config-------- #
     anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
-    anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
-    anchor_aspect_ratios = [1, 2, 3]
-    # anchor_base_scale = [2**0]
-    # anchor_aspect_ratios = [2]
+    # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
+    # anchor_aspect_ratios = [1, 2, 3]
+    anchor_base_scale = [2**0]
+    anchor_aspect_ratios = [2]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
