@@ -6,10 +6,10 @@ import numpy as np
 from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
-from module.rpn_jsvpd_ import RPN
+from module.rpn_jsvpd import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
-from det_oprs.fpn_roi_target import fpn_roi_target
+from det_oprs.fpn_roi_target import fpn_roi_target_vpd
 from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
 from det_oprs.utils import get_padded_tensor
 
@@ -21,7 +21,7 @@ class Network(nn.Module):
         self.RPN = RPN(config.rpn_channel)
         self.RCNN = RCNN()
 
-    def forward(self, image, im_info, epoch=None, gt_boxes=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None, id=None):
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
         image = get_padded_tensor(image, 64)
@@ -35,10 +35,11 @@ class Network(nn.Module):
         fpn_fms = self.FPN(image)
         # fpn_fms stride: 64,32,16,8,4, p6->p2
         rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
-        rcnn_rois, rcnn_labels, rcnn_bbox_targets = fpn_roi_target(
-                rpn_rois, im_info, gt_boxes, top_k=1)
-        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois,
-                rcnn_labels, rcnn_bbox_targets)
+        rpn_rois_vpd, rpn_rois = rpn_rois[0], rpn_rois[1]
+        rcnn_rois, rcnn_vpd_rois, rcnn_labels, rcnn_bbox_targets, rcnn_bbox_vpd_targets \
+            = fpn_roi_target_vpd(rpn_rois, rpn_rois_vpd, im_info, gt_boxes, top_k=1)
+        loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_vpd_rois, 
+                rcnn_labels, rcnn_bbox_vpd_targets)
         loss_dict.update(loss_dict_rpn)
         loss_dict.update(loss_dict_rcnn)
         return loss_dict

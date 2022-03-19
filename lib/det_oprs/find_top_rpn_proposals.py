@@ -153,7 +153,7 @@ def find_top_rpn_vpd_proposals(is_train, rpn_bbox_offsets_list, rpn_vpd_bbox_off
     if batch_per_gpu == 1:
         return batch_rois_vpd, batch_rois
     else:
-        concated_rois_vpd = torch.cat(return_rois, axis=0)
+        concated_rois_vpd = torch.cat(return_rois_vpd, axis=0)
         concated_rois = torch.cat(return_rois, axis=0)
         return concated_rois_vpd, concated_rois
 

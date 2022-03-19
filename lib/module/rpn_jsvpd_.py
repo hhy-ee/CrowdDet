@@ -52,11 +52,12 @@ class RPN(nn.Module):
             pred_bbox_offsets_list.append(pred_mean.reshape(N, -1, W, H))
             pred_bbox_vpd_offsets_list.append(pred_offset.reshape(N, -1, W, H))
         # sample from the predictions
-        vpd_rois, rois = find_top_rpn_vpd_proposals(
-                self.training, pred_bbox_offsets_list, pred_bbox_vpd_offsets_list, 
+        rois, vpd_rois = find_top_rpn_vpd_proposals(
+                self.training, pred_bbox_vpd_offsets_list, pred_bbox_offsets_list, 
                 pred_cls_score_list, all_anchors_list, im_info)
         if self.training:
-            rpn_rois = vpd_rois.type_as(features[0])
+            rpn_vpd_rois = vpd_rois.type_as(features[0])
+            rpn_rois = rois.type_as(features[0])
             rpn_labels, rpn_bbox_targets = fpn_anchor_target(
                     boxes, im_info, all_anchors_list)
             #rpn_labels = rpn_labels.astype(np.int32)
@@ -85,7 +86,7 @@ class RPN(nn.Module):
             loss_dict['loss_rpn_cls'] = loss_rpn_cls
             loss_dict['loss_rpn_loc'] = loss_rpn_loc
             loss_dict['loss_rpn_jsd'] = loss_rpn_jsd
-            return rpn_rois, loss_dict
+            return (rpn_vpd_rois, rpn_rois), loss_dict
         else:
             rpn_rois = rois.type_as(features[0])
             return rpn_rois
