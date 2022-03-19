@@ -5,9 +5,9 @@ import numpy as np
 
 from config import config
 from det_oprs.anchors_generator import AnchorGenerator
-from det_oprs.find_top_rpn_proposals import find_top_rpn_vpd_proposals
-from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_vpd_reshape
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, js_gaussian_loss
+from det_oprs.find_top_rpn_proposals import find_top_rpn_proposals, find_top_rpn_vpd_proposals
+from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_gmvpd_reshape
+from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, js_gmm_loss
 
 class RPN(nn.Module):
     def __init__(self, rpn_channel = 256):
@@ -18,7 +18,7 @@ class RPN(nn.Module):
             config.anchor_base_scale)
         self.rpn_conv = nn.Conv2d(256, rpn_channel, kernel_size=3, stride=1, padding=1)
         self.rpn_cls_score = nn.Conv2d(rpn_channel, config.num_cell_anchors * 2, kernel_size=1, stride=1)
-        self.rpn_bbox_offsets = nn.Conv2d(rpn_channel, config.num_cell_anchors * 8, kernel_size=1, stride=1)
+        self.rpn_bbox_offsets = nn.Conv2d(rpn_channel, config.num_cell_anchors * 4 * 2 * config.component.shape[1], kernel_size=1, stride=1)
 
         for l in [self.rpn_conv, self.rpn_cls_score, self.rpn_bbox_offsets]:
             nn.init.normal_(l.weight, std=0.01)
@@ -45,22 +45,30 @@ class RPN(nn.Module):
             all_anchors_list.append(layer_anchors)
         # variational inference
         for dist in pred_bbox_dists_list:
-            N, C, W, H = dist.shape
-            pred_mean = dist.reshape(N, config.num_cell_anchors, 8, W, H)[:, :, :4]
-            pred_lstd = dist.reshape(N, config.num_cell_anchors, 8, W, H)[:, :, 4:]
-            pred_offset = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
-            pred_bbox_offsets_list.append(pred_mean.reshape(N, -1, W, H))
-            pred_bbox_vpd_offsets_list.append(pred_offset.reshape(N, -1, W, H))
+            N, C, H, W = dist.shape
+            n_component = config.component.shape[1]
+            pred_prob = dist.permute(0,2,3,1).reshape(-1, 2*n_component)[:, :n_component]
+            gumbel_sample = -torch.log(-torch.log(torch.rand_like(pred_prob) + 1e-10) + 1e-10)
+            gumbel_weight = F.softmax((gumbel_sample + pred_prob) / config.gumbel_temperature, dim=1)
+            pred_weight = F.softmax(pred_prob, dim=1)
+            # variational inference
+            project_mean = torch.tensor(config.component).type_as(pred_weight).repeat(gumbel_weight.shape[0], 1)
+            pred_lstd = dist.permute(0,2,3,1).reshape(-1, 2*n_component)[:, n_component:]
+            pred_delta = project_mean + pred_lstd.exp() * torch.randn_like(project_mean)
+            pred_box = pred_weight.mul(project_mean).sum(dim=1).reshape(-1, 4)
+            pred_gumbel_box = gumbel_weight.mul(pred_delta).sum(dim=1).reshape(-1, 4)
+            pred_bbox_offsets_list.append(pred_box.reshape(N, H, W, 4).permute(0,3,1,2))
+            pred_bbox_vpd_offsets_list.append(pred_gumbel_box.reshape(N, H, W, 4).permute(0,3,1,2))
         # sample from the predictions
-        vpd_rois, rois = find_top_rpn_vpd_proposals(
+        rpn_rois = find_top_rpn_vpd_proposals(
                 self.training, pred_bbox_offsets_list, pred_bbox_vpd_offsets_list, 
                 pred_cls_score_list, all_anchors_list, im_info)
+        rpn_rois = rpn_rois.type_as(features[0])
         if self.training:
-            rpn_rois = rois.type_as(features[0])
             rpn_labels, rpn_bbox_targets = fpn_anchor_target(
                     boxes, im_info, all_anchors_list)
             #rpn_labels = rpn_labels.astype(np.int32)
-            pred_cls_score, pred_bbox_offsets, pred_bbox_dists = fpn_rpn_vpd_reshape(
+            pred_cls_score, pred_bbox_offsets, pred_bbox_dists = fpn_rpn_gmvpd_reshape(
                 pred_cls_score_list, pred_bbox_vpd_offsets_list, pred_bbox_dists_list)
             # rpn loss
             valid_masks = rpn_labels >= 0
@@ -73,8 +81,16 @@ class RPN(nn.Module):
                 pred_bbox_offsets[pos_masks],
                 rpn_bbox_targets[pos_masks],
                 config.rpn_smooth_l1_beta)
-            loss_jsd = js_gaussian_loss(
-                pred_bbox_dists[pos_masks],
+
+            # loss dist
+            n_component = config.component.shape[1]
+            pos_weight = F.softmax(pred_bbox_dists[pos_masks].reshape(-1, 2*n_component)[:, :n_component], dim=1)
+            project_mean = torch.tensor(config.component).type_as(pos_weight).repeat(pos_weight.shape[0], 1)
+            pos_pred_lstd = pred_bbox_dists[pos_masks].reshape(-1, 2*n_component)[:, n_component:]
+            loss_jsd = js_gmm_loss(
+                pos_weight,
+                project_mean,
+                pos_pred_lstd,
                 rpn_bbox_targets[pos_masks],
                 config.kl_weight)
             normalizer = 1 / valid_masks.sum().item()
@@ -87,6 +103,5 @@ class RPN(nn.Module):
             loss_dict['loss_rpn_jsd'] = loss_rpn_jsd
             return rpn_rois, loss_dict
         else:
-            rpn_rois = rois.type_as(features[0])
             return rpn_rois
 
