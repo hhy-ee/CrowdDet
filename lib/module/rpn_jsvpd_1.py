@@ -52,8 +52,8 @@ class RPN(nn.Module):
             pred_bbox_offsets_list.append(pred_mean.reshape(N, -1, W, H))
             pred_bbox_vpd_offsets_list.append(pred_offset.reshape(N, -1, W, H))
         # sample from the predictions
-        vpd_rois, rois = find_top_rpn_vpd_proposals(
-                self.training, pred_bbox_offsets_list, pred_bbox_vpd_offsets_list, 
+        rois, vpd_rois= find_top_rpn_vpd_proposals(
+                self.training, pred_bbox_vpd_offsets_list, pred_bbox_offsets_list, 
                 pred_cls_score_list, all_anchors_list, im_info)
         if self.training:
             rpn_rois = rois.type_as(features[0])

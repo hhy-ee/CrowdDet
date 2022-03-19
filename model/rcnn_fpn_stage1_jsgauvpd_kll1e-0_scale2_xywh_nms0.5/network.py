@@ -6,7 +6,7 @@ import numpy as np
 from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
-from module.rpn import RPN
+from module.rpn_jsvpd_ import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
@@ -21,7 +21,7 @@ class Network(nn.Module):
         self.RPN = RPN(config.rpn_channel)
         self.RCNN = RCNN()
 
-    def forward(self, image, im_info, gt_boxes=None, id=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None, id=None):
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
         image = get_padded_tensor(image, 64)

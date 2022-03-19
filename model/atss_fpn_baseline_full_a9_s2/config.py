@@ -68,7 +68,7 @@ class Config:
     max_boxes_of_image = 500
 
     # --------anchor generator config-------- #
-    anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
+    anchor_base_size = 64 # the minimize anchor size in the bigest feature map.
     anchor_base_scale = [2**0]
     anchor_aspect_ratios = [0.5, 1, 2]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)

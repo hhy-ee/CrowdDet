@@ -54,6 +54,35 @@ def fpn_rpn_vpd_reshape(pred_cls_score_list, pred_bbox_offsets_list, pred_bbox_d
     final_pred_bbox_dists = torch.cat(final_pred_bbox_dists_list, dim=0)
     return final_pred_cls_score, final_pred_bbox_offsets, final_pred_bbox_dists
 
+def fpn_rpn_gmvpd_reshape(pred_cls_score_list, pred_bbox_offsets_list, pred_bbox_dists_list):
+    final_pred_bbox_offsets_list = []
+    final_pred_bbox_dists_list = []
+    final_pred_cls_score_list = []
+    for bid in range(config.train_batch_per_gpu):
+        batch_pred_bbox_offsets_list = []
+        batch_pred_bbox_dists_list = []
+        batch_pred_cls_score_list = []
+        for i in range(len(pred_cls_score_list)):
+            pred_cls_score_perlvl = pred_cls_score_list[i][bid] \
+                .permute(1, 2, 0).reshape(-1, 2)
+            pred_bbox_offsets_perlvl = pred_bbox_offsets_list[i][bid] \
+                .permute(1, 2, 0).reshape(-1, 4)
+            pred_bbox_dists_perlvl = pred_bbox_dists_list[i][bid] \
+                .permute(1, 2, 0).reshape(-1, config.num_cell_anchors * 2 * 4 * config.component.shape[1])
+            batch_pred_cls_score_list.append(pred_cls_score_perlvl)
+            batch_pred_bbox_offsets_list.append(pred_bbox_offsets_perlvl)
+            batch_pred_bbox_dists_list.append(pred_bbox_dists_perlvl)
+        batch_pred_cls_score = torch.cat(batch_pred_cls_score_list, dim=0)
+        batch_pred_bbox_offsets = torch.cat(batch_pred_bbox_offsets_list, dim=0)
+        batch_pred_bbox_dists = torch.cat(batch_pred_bbox_dists_list, dim=0)
+        final_pred_cls_score_list.append(batch_pred_cls_score)
+        final_pred_bbox_offsets_list.append(batch_pred_bbox_offsets)
+        final_pred_bbox_dists_list.append(batch_pred_bbox_dists)
+    final_pred_cls_score = torch.cat(final_pred_cls_score_list, dim=0)
+    final_pred_bbox_offsets = torch.cat(final_pred_bbox_offsets_list, dim=0)
+    final_pred_bbox_dists = torch.cat(final_pred_bbox_dists_list, dim=0)
+    return final_pred_cls_score, final_pred_bbox_offsets, final_pred_bbox_dists
+
 def fpn_anchor_target_opr_core_impl(
         gt_boxes, im_info, anchors, allow_low_quality_matches=True):
     ignore_label = config.ignore_label

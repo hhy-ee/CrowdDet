@@ -10,7 +10,7 @@ from module.rpn import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss
+from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, kl_gaussian_loss
 from det_oprs.utils import get_padded_tensor
 
 class Network(nn.Module):
@@ -21,7 +21,7 @@ class Network(nn.Module):
         self.RPN = RPN(config.rpn_channel)
         self.RCNN = RCNN()
 
-    def forward(self, image, im_info, gt_boxes=None, id=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None, id=None):
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
         image = get_padded_tensor(image, 64)
@@ -61,7 +61,7 @@ class RCNN(nn.Module):
             nn.init.constant_(l.bias, 0)
         # box predictor
         self.pred_cls = nn.Linear(1024, config.num_classes)
-        self.pred_delta = nn.Linear(1024, config.num_classes * 4)
+        self.pred_delta = nn.Linear(1024, 8)
         for l in [self.pred_cls]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
@@ -78,36 +78,45 @@ class RCNN(nn.Module):
         flatten_feature = F.relu_(self.fc1(flatten_feature))
         flatten_feature = F.relu_(self.fc2(flatten_feature))
         pred_cls = self.pred_cls(flatten_feature)
-        pred_delta = self.pred_delta(flatten_feature)
+        pred_dist = self.pred_delta(flatten_feature)
         if self.training:
             # loss for regression
             labels = labels.long().flatten()
             fg_masks = labels > 0
             valid_masks = labels >= 0
             # multi class
-            pred_delta = pred_delta.reshape(-1, config.num_classes, 4)
-            fg_gt_classes = labels[fg_masks]
-            pred_delta = pred_delta[fg_masks, fg_gt_classes, :]
+            pred_dist = pred_dist.reshape(-1, 8)
+            pred_dist = pred_dist[fg_masks, :]
+            # gaussian reparameterzation
+            pred_mean = pred_dist[:, :4]
+            pred_lstd = pred_dist[:, 4:]
+            pred_delta = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
             localization_loss = smooth_l1_loss(
                 pred_delta,
                 bbox_targets[fg_masks],
                 config.rcnn_smooth_l1_beta)
+            loss_jsd = kl_gaussian_loss(
+                pred_dist,
+                bbox_targets[fg_masks],
+                config.kl_weight)
             # loss for classification
             objectness_loss = softmax_loss(pred_cls, labels)
             objectness_loss = objectness_loss * valid_masks
             normalizer = 1.0 / valid_masks.sum().item()
             loss_rcnn_loc = localization_loss.sum() * normalizer
             loss_rcnn_cls = objectness_loss.sum() * normalizer
+            loss_rcnn_jsd = loss_jsd.sum() * normalizer
             loss_dict = {}
             loss_dict['loss_rcnn_loc'] = loss_rcnn_loc
             loss_dict['loss_rcnn_cls'] = loss_rcnn_cls
+            loss_dict['loss_rcnn_jsd'] = loss_rcnn_jsd
             return loss_dict
         else:
             class_num = pred_cls.shape[-1] - 1
             tag = torch.arange(class_num).type_as(pred_cls)+1
             tag = tag.repeat(pred_cls.shape[0], 1).reshape(-1,1)
             pred_scores = F.softmax(pred_cls, dim=-1)[:, 1:].reshape(-1, 1)
-            pred_delta = pred_delta[:, 4:].reshape(-1, 4)
+            pred_delta = pred_dist[:, :4].reshape(-1, 4)
             base_rois = rcnn_rois[:, 1:5].repeat(1, class_num).reshape(-1, 4)
             pred_bbox = restore_bbox(base_rois, pred_delta, True)
             pred_bbox = torch.cat([pred_bbox, pred_scores, tag], axis=1)

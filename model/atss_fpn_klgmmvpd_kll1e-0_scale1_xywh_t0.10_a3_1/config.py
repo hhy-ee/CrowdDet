@@ -69,8 +69,10 @@ class Config:
 
     # --------anchor generator config-------- #
     anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
-    anchor_base_scale = [2**0]
-    anchor_aspect_ratios = [0.5, 1, 2]
+    anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
+    anchor_aspect_ratios = [2]
+    # anchor_base_scale = [2**0]
+    # anchor_aspect_ratios = [2]
     num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
@@ -82,5 +84,9 @@ class Config:
 
     # -------------atss-config --------------------#
     ignore_ioa_thr = 0.5
-    assign_topk = 20
+    assign_topk = 9
+    kl_weight = 1.0
+    gumbel_temperature = 0.1
+    project = np.linspace(-1, 1, 11)[None, :]
+
 config = Config()
