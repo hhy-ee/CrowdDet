@@ -48,7 +48,7 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 1e-3 * 1.25 * 2
+    base_lr = 1e-3 * 1.25
 
     warm_iter = 800
     max_epoch = 30
@@ -58,7 +58,7 @@ class Config:
 
     # ----------test config---------- #
     test_nms = 0.5
-    test_nms_method = 'set_nms'
+    test_nms_method = 'normal_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -102,5 +102,10 @@ class Config:
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
     save_data = False
 
+    # -------------atss-config --------------------#
+    kl_weight = 1.0
+    project = np.linspace(-0.7, 0.7, 15)[None, :]
+    rpn_cls_refine = False
+    add_gt_roi = False
 config = Config()
 

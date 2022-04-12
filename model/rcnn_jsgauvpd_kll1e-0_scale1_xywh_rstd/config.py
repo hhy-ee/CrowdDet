@@ -58,7 +58,7 @@ class Config:
 
     # ----------test config---------- #
     test_nms = 0.5
-    test_nms_method = 'set_nms'
+    test_nms_method = 'normal_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -101,6 +101,11 @@ class Config:
     bbox_normalize_means = np.array([0, 0, 0, 0])
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
     save_data = False
+
+    # -------------atss-config --------------------#
+    kl_weight = 1.0
+    project = np.linspace(-0.7, 0.7, 15)[None, :]
+    rpn_cls_refine = True
 
 config = Config()
 

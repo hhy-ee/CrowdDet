@@ -43,12 +43,12 @@ class Config:
 
     # ----------train config---------- #
     backbone_freeze_at = 2
-    rpn_channel = 256
-    
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 1e-3 * 1.25 * 2
+    base_lr = 3.125e-4
+    focal_loss_alpha = 0.25
+    focal_loss_gamma = 2
 
     warm_iter = 800
     max_epoch = 30
@@ -57,50 +57,34 @@ class Config:
     log_dump_interval = 20
 
     # ----------test config---------- #
+    test_layer_topk = 1000
     test_nms = 0.5
-    test_nms_method = 'set_nms'
+    test_nms_method = 'normal_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
-    # ----------model config---------- #
-    batch_filter_box_size = 0
+    # ----------dataset config---------- #
     nr_box_dim = 5
-    ignore_label = -1
     max_boxes_of_image = 500
 
-    # ----------rois generator config---------- #
-    anchor_base_size = 32
-    anchor_base_scale = [1]
+    # --------anchor generator config-------- #
+    anchor_base_size = 32 # the minimize anchor size in the bigest feature map.
+    # anchor_base_scale = [2**0, 2**(1/3), 2**(2/3)]
     anchor_aspect_ratios = [1, 2, 3]
-    num_cell_anchors = len(anchor_aspect_ratios)
-    anchor_within_border = False
-
-    rpn_min_box_size = 2
-    rpn_nms_threshold = 0.7
-    train_prev_nms_top_n = 12000
-    train_post_nms_top_n = 2000
-    test_prev_nms_top_n = 6000
-    test_post_nms_top_n = 1000
+    anchor_base_scale = [2**0]
+    num_cell_anchors = len(anchor_aspect_ratios) * len(anchor_base_scale)
 
     # ----------binding&training config---------- #
-    rpn_smooth_l1_beta = 1
-    rcnn_smooth_l1_beta = 1
+    smooth_l1_beta = 0.1
+    negative_thresh = 0.4
+    positive_thresh = 0.5
+    allow_low_quality = True
+    save_data = True
 
-    num_sample_anchors = 256
-    positive_anchor_ratio = 0.5
-    rpn_positive_overlap = 0.7
-    rpn_negative_overlap = 0.3
-    rpn_bbox_normalize_targets = False
-
-    num_rois = 512
-    fg_ratio = 0.5
-    fg_threshold = 0.5
-    bg_threshold_high = 0.5
-    bg_threshold_low = 0.0
-    rcnn_bbox_normalize_targets = True
-    bbox_normalize_means = np.array([0, 0, 0, 0])
-    bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
-    save_data = False
+    # ----------freeanchor config---------- #
+    bbox_thr = 0.6
+    pre_anchor_topk = 50
+    loss_box_alpha = 0.5
+    loss_box_gamma = 2.0
 
 config = Config()
-

@@ -21,7 +21,7 @@ class Network(nn.Module):
         self.RPN = RPN(config.rpn_channel)
         self.RCNN = RCNN()
 
-    def forward(self, image, im_info, gt_boxes=None, id=None):
+    def forward(self, image, im_info, epoch=None, gt_boxes=None, id=None):
         image = (image - torch.tensor(config.image_mean[None, :, None, None]).type_as(image)) / (
                 torch.tensor(config.image_std[None, :, None, None]).type_as(image))
         image = get_padded_tensor(image, 64)

@@ -88,8 +88,8 @@ class Config:
 
     num_sample_anchors = 256
     positive_anchor_ratio = 0.5
-    rpn_positive_overlap = 0.7
-    rpn_negative_overlap = 0.3
+    rpn_positive_overlap = 0.5
+    rpn_negative_overlap = 0.4
     rpn_bbox_normalize_targets = False
 
     num_rois = 512
@@ -101,6 +101,10 @@ class Config:
     bbox_normalize_means = np.array([0, 0, 0, 0])
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
     save_data = False
+
+    # -------------atss-config --------------------#
+    kl_weight = 1.0
+    project = np.linspace(-1, 1, 21)[None, :]
 
 config = Config()
 

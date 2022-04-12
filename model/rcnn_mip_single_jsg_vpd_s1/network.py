@@ -6,7 +6,7 @@ import numpy as np
 from config import config
 from backbone.resnet50 import ResNet50
 from backbone.fpn import FPN
-from module.rpn import RPN
+from module.rpn_jsvpd import RPN
 from layers.pooler import roi_pooler
 from det_oprs.bbox_opr import bbox_transform_inv_opr
 from det_oprs.fpn_roi_target import fpn_roi_target
@@ -35,8 +35,9 @@ class Network(nn.Module):
         fpn_fms = self.FPN(image)
         # fpn_fms stride: 64,32,16,8,4, p6->p2
         rpn_rois, loss_dict_rpn = self.RPN(fpn_fms, im_info, gt_boxes)
+        rpn_vpd_rois, rpn_rois = rpn_rois[0], rpn_rois[1]
         rcnn_rois, rcnn_labels, rcnn_bbox_targets = fpn_roi_target(
-                rpn_rois, im_info, gt_boxes, top_k=2)
+                rpn_vpd_rois, im_info, gt_boxes, top_k=2)
         loss_dict_rcnn = self.RCNN(fpn_fms, rcnn_rois,
                 rcnn_labels, rcnn_bbox_targets)
         loss_dict.update(loss_dict_rpn)

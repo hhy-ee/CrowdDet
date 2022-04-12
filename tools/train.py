@@ -176,8 +176,8 @@ def run_train():
     # os.environ['NCCL_DEBUG'] = 'INFO'
 
     args = parser.parse_args()
-    # args = parser.parse_args(['--model_dir', 'retina_fpn_vpd_pt0.6_kll1e-3'])
-    # args = parser.parse_args(['--model_dir', 'fa_fpn_jsgauvpd_kll1e-0_scale2_xywh'])
+    # args = parser.parse_args(['--model_dir', 'fa_fpn_baseline_a3'])
+    # args = parser.parse_args(['--model_dir', 'farcnn_stage1_jsgauvpd_kll1e-0_scale1_xywh_'])
     
 
     # import libs

@@ -6,8 +6,8 @@ import numpy as np
 from config import config
 from det_oprs.anchors_generator import AnchorGenerator
 from det_oprs.find_top_rpn_proposals import find_top_rpn_vpd_proposals
-from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_vpd_reshape
-from det_oprs.loss_opr import softmax_loss, smooth_l1_loss, js_gaussian_loss
+from det_oprs.fpn_anchor_target import fpn_anchor_target, fpn_rpn_vpd_reshape, fpn_rpn_vpd_rstd_reshape
+from det_oprs.loss_opr import softmax_loss, softmax_rstd_loss, smooth_l1_loss, js_gaussian_loss
 
 class RPN(nn.Module):
     def __init__(self, rpn_channel = 256):
@@ -19,7 +19,20 @@ class RPN(nn.Module):
         self.rpn_conv = nn.Conv2d(256, rpn_channel, kernel_size=3, stride=1, padding=1)
         self.rpn_cls_score = nn.Conv2d(rpn_channel, config.num_cell_anchors * 2, kernel_size=1, stride=1)
         self.rpn_bbox_offsets = nn.Conv2d(rpn_channel, config.num_cell_anchors * 8, kernel_size=1, stride=1)
-
+        
+        # refinement
+        if config.rpn_cls_refine:
+            ref_channels = 4
+            reg_channels = 64
+            conf_vector = [nn.Conv2d(ref_channels, reg_channels, 1)]
+            conf_vector += [nn.ReLU(inplace=True)]
+            conf_vector += [nn.Conv2d(reg_channels, 1, 1), nn.Sigmoid()]
+            self.rpn_reg_conf = nn.Sequential(*conf_vector)
+            for layer in self.rpn_reg_conf.modules():
+                if isinstance(layer, nn.Conv2d):
+                    torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
+                    torch.nn.init.constant_(layer.bias, 0)
+            
         for l in [self.rpn_conv, self.rpn_cls_score, self.rpn_bbox_offsets]:
             nn.init.normal_(l.weight, std=0.01)
             nn.init.constant_(l.bias, 0)
@@ -43,7 +56,9 @@ class RPN(nn.Module):
             layer_anchors = self.anchors_generator(fm, base_stride, off_stride)
             off_stride = off_stride // 2
             all_anchors_list.append(layer_anchors)
+
         # variational inference
+        pred_ref_score_list = []
         for dist in pred_bbox_dists_list:
             N, C, W, H = dist.shape
             pred_mean = dist.reshape(N, config.num_cell_anchors, 8, W, H)[:, :, :4]
@@ -51,6 +66,11 @@ class RPN(nn.Module):
             pred_offset = pred_mean + pred_lstd.exp() * torch.randn_like(pred_mean)
             pred_bbox_offsets_list.append(pred_mean.reshape(N, -1, W, H))
             pred_bbox_vpd_offsets_list.append(pred_offset.reshape(N, -1, W, H))
+            if config.rpn_cls_refine:
+                ref_score = self.rpn_reg_conf(pred_lstd.reshape(-1, 4, W, H)).\
+                    reshape(N, config.num_cell_anchors, W, H)
+                pred_ref_score_list.append(ref_score)
+
         # sample from the predictions
         rois, vpd_rois = find_top_rpn_vpd_proposals(
                 self.training, pred_bbox_vpd_offsets_list, pred_bbox_offsets_list, 
@@ -61,13 +81,23 @@ class RPN(nn.Module):
             rpn_labels, rpn_bbox_targets = fpn_anchor_target(
                     boxes, im_info, all_anchors_list)
             #rpn_labels = rpn_labels.astype(np.int32)
-            pred_cls_score, pred_bbox_offsets, pred_bbox_dists = fpn_rpn_vpd_reshape(
-                pred_cls_score_list, pred_bbox_vpd_offsets_list, pred_bbox_dists_list)
+            if config.rpn_cls_refine:
+                pred_cls_score, pred_ref_score, pred_bbox_offsets, pred_bbox_dists = fpn_rpn_vpd_rstd_reshape(
+                pred_cls_score_list, pred_ref_score_list, pred_bbox_vpd_offsets_list, pred_bbox_dists_list)
+            else:
+                pred_cls_score, pred_bbox_offsets, pred_bbox_dists = fpn_rpn_vpd_reshape(
+                    pred_cls_score_list, pred_bbox_vpd_offsets_list, pred_bbox_dists_list)
             # rpn loss
             valid_masks = rpn_labels >= 0
-            objectness_loss = softmax_loss(
-                pred_cls_score[valid_masks],
-                rpn_labels[valid_masks])
+            if config.rpn_cls_refine:
+                objectness_loss = softmax_rstd_loss(
+                    pred_cls_score[valid_masks],
+                    pred_ref_score[valid_masks],
+                    rpn_labels[valid_masks])
+            else:
+                objectness_loss = softmax_loss(
+                    pred_cls_score[valid_masks],
+                    rpn_labels[valid_masks])
 
             pos_masks = rpn_labels > 0
             localization_loss = smooth_l1_loss(
@@ -90,4 +120,3 @@ class RPN(nn.Module):
         else:
             rpn_rois = rois.type_as(features[0])
             return rpn_rois
-

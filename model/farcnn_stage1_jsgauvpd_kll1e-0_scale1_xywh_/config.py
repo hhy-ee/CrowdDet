@@ -48,7 +48,7 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 1e-3 * 1.25 * 2
+    base_lr = 1e-3 * 1.25
 
     warm_iter = 800
     max_epoch = 30
@@ -58,7 +58,7 @@ class Config:
 
     # ----------test config---------- #
     test_nms = 0.5
-    test_nms_method = 'set_nms'
+    test_nms_method = 'normal_nms'
     visulize_threshold = 0.3
     pred_cls_threshold = 0.01
 
@@ -71,7 +71,7 @@ class Config:
     # ----------rois generator config---------- #
     anchor_base_size = 32
     anchor_base_scale = [1]
-    anchor_aspect_ratios = [1, 2, 3]
+    anchor_aspect_ratios = [2]
     num_cell_anchors = len(anchor_aspect_ratios)
     anchor_within_border = False
 
@@ -101,6 +101,15 @@ class Config:
     bbox_normalize_means = np.array([0, 0, 0, 0])
     bbox_normalize_stds = np.array([0.1, 0.1, 0.2, 0.2])
     save_data = False
+
+    bbox_thr = 0.6
+    pre_anchor_topk = 50
+    loss_box_alpha = 0.5
+    loss_box_gamma = 2.0
+    smooth_l1_beta = 1
+
+    kl_weight = 1.0
+    project = np.linspace(-1, 1, 21)[None, :]
 
 config = Config()
 

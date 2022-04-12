@@ -48,7 +48,7 @@ class Config:
     train_batch_per_gpu = 4
     momentum = 0.9
     weight_decay = 1e-4
-    base_lr = 1e-3 * 1.25
+    base_lr = 1e-3 * 1.25 * 2
 
     warm_iter = 800
     max_epoch = 30
@@ -71,7 +71,7 @@ class Config:
     # ----------rois generator config---------- #
     anchor_base_size = 32
     anchor_base_scale = [1]
-    anchor_aspect_ratios = [1]
+    anchor_aspect_ratios = [1, 2, 3]
     num_cell_anchors = len(anchor_aspect_ratios)
     anchor_within_border = False
 

@@ -22,6 +22,21 @@ def softmax_loss(score, label, ignore_label=-1):
     loss = loss * mask
     return loss
 
+def softmax_rstd_loss(score, ref_score, label, ignore_label=-1):
+    with torch.no_grad():
+        max_score = score.max(axis=1, keepdims=True)[0]
+    score = score - max_score
+    log_prob = score - torch.log(torch.exp(score).sum(axis=1, keepdims=True))
+    mask = label != ignore_label
+    vlabel = label * mask
+    onehot = torch.zeros(vlabel.shape[0], config.num_classes, device=score.device)
+    onehot.scatter_(1, vlabel.reshape(-1, 1), 1)
+    # loss = -(log_prob * onehot).sum(axis=1)
+    loss = -(log_prob * onehot).sum(axis=1, keepdims=True).exp().\
+          mul(ref_score).log().reshape(-1)
+    loss = loss * mask
+    return loss
+
 def smooth_l1_loss(pred, target, beta: float):
     if beta < 1e-5:
         loss = torch.abs(input - target)
