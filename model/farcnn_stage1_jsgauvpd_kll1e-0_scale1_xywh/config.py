@@ -45,7 +45,7 @@ class Config:
     backbone_freeze_at = 2
     rpn_channel = 256
     
-    train_batch_per_gpu = 4
+    train_batch_per_gpu = 2
     momentum = 0.9
     weight_decay = 1e-4
     base_lr = 1e-3 * 1.25 / 2
